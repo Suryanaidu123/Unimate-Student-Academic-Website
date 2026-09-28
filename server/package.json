@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "nodemon server.js",
     "start": "node server.js",
-    "seed:admin": "node scripts/seedAdmin.js"
+    "seed:admin": "node scripts/seedAdmin.js",
+    "seed:rollseries": "node scripts/seedRollSeries.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

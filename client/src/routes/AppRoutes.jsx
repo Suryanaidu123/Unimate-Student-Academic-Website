@@ -43,7 +43,7 @@ import AdminTimetable from '../pages/admin/Timetable.jsx';
 import AdminExams from '../pages/admin/Exams.jsx';
 import AdminNotifications from '../pages/admin/Notifications.jsx';
 import AdminAuditLogs from '../pages/admin/AuditLogs.jsx';
-
+import BulkStudents from '../pages/admin/BulkStudents.jsx';
 import ProtectedRoute from './ProtectedRoute.jsx';
 
 export default function AppRoutes() {
@@ -115,6 +115,7 @@ export default function AppRoutes() {
         <Route path="materials" element={<AdminMaterials />} />
         <Route path="marks" element={<AdminMarks />} />
         <Route path="timetable" element={<AdminTimetable />} />
+        <Route path="bulk-students" element={<BulkStudents />} />
         <Route path="exams" element={<AdminExams />} />
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="audit-logs" element={<AdminAuditLogs />} />

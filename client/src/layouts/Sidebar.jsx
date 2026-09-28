@@ -32,6 +32,7 @@ const links = {
     { to: '/admin/subjects', label: 'Subjects & Labs', icon: BookOpen },
     { to: '/admin/notes', label: 'Notes', icon: FileText },
     { to: '/admin/notifications', label: 'Notifications', icon: Bell },
+    { to: '/admin/bulk-students', label: 'Bulk Add Students', icon: Users }, 
     { to: '/admin/audit-logs', label: 'Audit Logs', icon: ScrollText },
   ],
 };
