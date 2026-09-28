@@ -1,0 +1,7 @@
+module.exports = {
+  WRITTEN_MAX: 30,
+  WRITTEN_DIVISOR: 2,
+  ONLINE_MAX: 10,
+  ASSIGNMENT_MAX: 5,
+  MID_TOTAL_MAX: 30,
+};

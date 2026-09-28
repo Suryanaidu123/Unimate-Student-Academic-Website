@@ -1,0 +1,22 @@
+const mongoose = require('mongoose');
+
+const studentSchema = new mongoose.Schema({
+  rollNumber: { type: String, required: true, unique: true, trim: true },
+  name: { type: String, default: '', trim: true },
+  email: { type: String, required: true, lowercase: true, trim: true },
+  phoneNumber: { type: String, trim: true },
+  department: { type: String, default: 'AI & ML' },
+  course: { type: String, default: 'B.Tech AI & ML' },
+  batch: { type: String, default: '' },
+  admissionYear: { type: Number },
+  academicYear: { type: Number, required: true, min: 2, max: 4 },
+  year: { type: Number, required: true, min: 2, max: 4 },
+  semester: { type: Number, required: true, min: 1, max: 8 },
+  section: { type: String, default: 'A' },
+  status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
+}, { timestamps: true });
+
+studentSchema.index({ year: 1, semester: 1, section: 1 });
+studentSchema.index({ batch: 1, status: 1 });
+
+module.exports = mongoose.model('Student', studentSchema);
