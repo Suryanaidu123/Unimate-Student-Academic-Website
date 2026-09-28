@@ -6,9 +6,10 @@ const createStudentSchema = z.object({
   academicYear: z.number().int().min(2).max(4),
 }).strict();
 
+// Update allows: email (editable), name (correctable), status
 const updateStudentSchema = z.object({
-  name: z.string().optional(),
-  phoneNumber: z.string().optional(),
+  email: z.string().email().optional(),
+  name: z.string().max(120).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
 }).strict();
 
