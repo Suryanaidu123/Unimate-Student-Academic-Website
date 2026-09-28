@@ -14,9 +14,13 @@ const studentSchema = new mongoose.Schema({
   semester: { type: Number, required: true, min: 1, max: 8 },
   section: { type: String, default: 'A' },
   status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
+   contactBlocked: { type: Boolean, default: false },
+  contactBlockedAt: { type: Date, default: null },
+   contactBlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true });
 
 studentSchema.index({ year: 1, semester: 1, section: 1 });
 studentSchema.index({ batch: 1, status: 1 });
+studentSchema.index({ contactBlocked: 1 });
 
 module.exports = mongoose.model('Student', studentSchema);

@@ -8,26 +8,66 @@ const notification = require('./notification.service');
 // Student — create
 async function createMessage({ subject, body }, user) {
   if (!user.studentId) throw ApiError.forbidden('Only students can contact admin');
+
+  const student = await Student.findById(user.studentId);
+  if (!student) throw ApiError.notFound('Student not found');
+
+  if (student.contactBlocked) {
+    throw ApiError.forbidden(
+      'You are currently blocked from contacting the admin.'
+    );
+  }
+
   const msg = await ContactMessage.create({
     studentId: user.studentId,
     studentUserId: user.userId,
     subject: subject.trim(),
     body: body.trim(),
   });
+
   await auditLog.log({
-    actor: user, action: 'CONTACT_MESSAGE_CREATE',
-    entityType: 'ContactMessage', entityId: msg._id,
+    actor: user,
+    action: 'CONTACT_MESSAGE_CREATE',
+    entityType: 'ContactMessage',
+    entityId: msg._id,
     description: `Student message: ${subject}`,
   });
+
   return msg;
 }
 
 // Student — list own
 async function listMine(user) {
   if (!user.studentId) throw ApiError.forbidden();
-  return ContactMessage.find({ studentId: user.studentId }).sort({ createdAt: -1 });
+  const [messages, student] = await Promise.all([
+    ContactMessage.find({ studentId: user.studentId }).sort({ createdAt: -1 }),
+    Student.findById(user.studentId).select('contactBlocked contactBlockedAt'),
+  ]);
+  return {
+    messages,
+    blocked: student?.contactBlocked || false,
+    blockedAt: student?.contactBlockedAt || null,
+  };
 }
+async function setBlocked(studentId, blocked, actor) {
+  const student = await Student.findById(studentId);
+  if (!student) throw ApiError.notFound('Student not found');
 
+  student.contactBlocked = blocked;
+  student.contactBlockedAt = blocked ? new Date() : null;
+  student.contactBlockedBy = blocked ? actor.userId : null;
+  await student.save();
+
+  await auditLog.log({
+    actor,
+    action: blocked ? 'STUDENT_BLOCK_CONTACT' : 'STUDENT_UNBLOCK_CONTACT',
+    entityType: 'Student',
+    entityId: student._id,
+    description: `${blocked ? 'Blocked' : 'Unblocked'} student ${student.rollNumber} from contacting admin`,
+  });
+
+  return student;
+}
 // Admin — list all
 async function listAll({ status, q, page = 1, limit = 50 }) {
   const query = {};
@@ -36,9 +76,10 @@ async function listAll({ status, q, page = 1, limit = 50 }) {
     { subject: new RegExp(q, 'i') },
     { body: new RegExp(q, 'i') },
   ];
+
   const [items, total] = await Promise.all([
     ContactMessage.find(query)
-      .populate('studentId', 'rollNumber name email year section')
+      .populate('studentId', 'rollNumber name email year section contactBlocked contactBlockedAt')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
@@ -50,7 +91,7 @@ async function listAll({ status, q, page = 1, limit = 50 }) {
 // Admin — get one (with full context)
 async function getOne(id) {
   const m = await ContactMessage.findById(id)
-    .populate('studentId', 'rollNumber name email year semester section batch');
+    .populate('studentId', 'rollNumber name email year semester section batch contactBlocked contactBlockedAt');
   if (!m) throw ApiError.notFound('Message not found');
   return m;
 }
@@ -99,4 +140,4 @@ async function remove(id, actor) {
   return { ok: true };
 }
 
-module.exports = { createMessage, listMine, listAll, getOne, reply, remove };
+module.exports = { createMessage, listMine, listAll, getOne, reply, remove,setBlocked};

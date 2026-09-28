@@ -14,5 +14,6 @@ router.get('/', requireRole('ADMIN'), ctrl.listAll);
 router.get('/:id', requireRole('ADMIN'), ctrl.getOne);
 router.post('/:id/reply', requireRole('ADMIN'), ctrl.reply);
 router.delete('/:id', requireRole('ADMIN'), ctrl.remove);
-
+router.post('/block/:studentId',   requireRole('ADMIN'), ctrl.block);
+router.post('/unblock/:studentId', requireRole('ADMIN'), ctrl.unblock);
 module.exports = router;

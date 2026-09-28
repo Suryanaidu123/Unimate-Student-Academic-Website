@@ -9,7 +9,19 @@ exports.create = async (req, res, next) => {
 exports.listMine = async (req, res, next) => {
   try { return success(res, await service.listMine(req.user)); } catch (e) { next(e); }
 };
+exports.block = async (req, res, next) => {
+  try {
+    const data = await service.setBlocked(req.params.studentId, true, req.user);
+    return success(res, data, 'Student blocked from contacting admin');
+  } catch (e) { next(e); }
+};
 
+exports.unblock = async (req, res, next) => {
+  try {
+    const data = await service.setBlocked(req.params.studentId, false, req.user);
+    return success(res, data, 'Student unblocked');
+  } catch (e) { next(e); }
+};
 exports.listAll = async (req, res, next) => {
   try { return success(res, await service.listAll(req.query)); } catch (e) { next(e); }
 };

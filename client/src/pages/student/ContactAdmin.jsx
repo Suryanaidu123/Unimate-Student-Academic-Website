@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Send, MessageSquare } from 'lucide-react';
+import { Send, MessageSquare, ShieldOff } from 'lucide-react';
 import api from '../../services/api.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -10,17 +10,25 @@ import Badge from '../../components/ui/Badge.jsx';
 export default function StudentContactAdmin() {
   const [form, setForm] = useState({ subject: '', body: '' });
   const [messages, setMessages] = useState([]);
+  const [blocked, setBlocked] = useState(false);
+  const [blockedAt, setBlockedAt] = useState(null);
   const [sending, setSending] = useState(false);
 
   function load() {
     api.get('/contact/mine')
-      .then((r) => setMessages(r.data.data || []))
+      .then((r) => {
+        const d = r.data.data || {};
+        setMessages(d.messages || []);
+        setBlocked(!!d.blocked);
+        setBlockedAt(d.blockedAt || null);
+      })
       .catch(() => {});
   }
   useEffect(load, []);
 
   async function onSend(e) {
     e.preventDefault();
+    if (blocked) return toast.error('You are currently blocked from contacting the admin.');
     setSending(true);
     try {
       await api.post('/contact', {
@@ -46,11 +54,31 @@ export default function StudentContactAdmin() {
         </p>
       </div>
 
+      {/* Blocked banner */}
+      {blocked && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 flex items-start gap-3">
+          <ShieldOff size={20} className="mt-0.5 shrink-0" />
+          <div className="text-sm">
+            <p className="font-semibold">You are currently blocked from contacting the admin.</p>
+            {blockedAt && (
+              <p className="text-xs mt-1">
+                Blocked on {new Date(blockedAt).toLocaleString()}.
+              </p>
+            )}
+            <p className="text-xs mt-1">
+              If you believe this is a mistake, please contact the college office directly.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Composer */}
       <Card title="New Message">
         <form onSubmit={onSend} className="space-y-3">
           <Input
             label="Subject"
             required
+            disabled={blocked}
             value={form.subject}
             onChange={(e) => setForm({ ...form, subject: e.target.value })}
             placeholder="e.g. Issue with my marks"
@@ -61,17 +89,21 @@ export default function StudentContactAdmin() {
               className="input"
               rows={5}
               required
+              disabled={blocked}
               value={form.body}
               onChange={(e) => setForm({ ...form, body: e.target.value })}
-              placeholder="Describe your question or issue..."
+              placeholder={blocked
+                ? 'Sending is disabled while you are blocked.'
+                : 'Describe your question or issue...'}
             />
           </label>
-          <Button type="submit" disabled={sending}>
-            <Send size={16} /> {sending ? 'Sending…' : 'Send to Admin'}
+          <Button type="submit" disabled={sending || blocked}>
+            <Send size={16} /> {sending ? 'Sending…' : blocked ? 'Blocked' : 'Send to Admin'}
           </Button>
         </form>
       </Card>
 
+      {/* History */}
       <Card title={`My Messages (${messages.length})`}>
         {messages.length === 0 ? (
           <p className="text-sm text-slate-500 py-4">No messages yet.</p>
@@ -88,7 +120,7 @@ export default function StudentContactAdmin() {
                   </div>
                   <Badge variant={
                     m.status === 'REPLIED' ? 'success' :
-                    m.status === 'CLOSED' ? 'default' : 'warning'
+                    m.status === 'CLOSED'  ? 'default' : 'warning'
                   }>{m.status}</Badge>
                 </div>
 

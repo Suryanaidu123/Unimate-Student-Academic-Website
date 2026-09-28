@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Send, Trash2, MessageSquare } from 'lucide-react';
+import { Send, Trash2, MessageSquare, ShieldOff, ShieldCheck } from 'lucide-react';
 import api from '../../services/api.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -57,6 +57,30 @@ export default function AdminMessages() {
     } catch { toast.error('Failed'); }
   }
 
+  async function toggleBlock(student, blocked) {
+    const confirmMsg = blocked
+      ? `Block ${student.rollNumber} from contacting admin?`
+      : `Unblock ${student.rollNumber}?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      const url = blocked
+        ? `/contact/block/${student._id}`
+        : `/contact/unblock/${student._id}`;
+      await api.post(url);
+      toast.success(blocked ? 'Student blocked' : 'Student unblocked');
+
+      // Refresh both the list and the selected message
+      await load();
+      if (selected) {
+        const r = await api.get(`/contact/${selected._id}`);
+        setSelected(r.data.data);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed');
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -65,46 +89,55 @@ export default function AdminMessages() {
             <MessageSquare size={22} /> Student Messages
           </h1>
           <p className="text-sm text-slate-500">
-            Messages sent by students through Contact Admin.
+            View, reply to, and manage student messages. Block abusive senders to stop new messages.
           </p>
         </div>
         <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-4">
-        {/* Left — message list */}
+        {/* Left — list */}
         <div className="lg:col-span-2 space-y-2 max-h-[70vh] overflow-y-auto">
           {items.length === 0 && (
             <Card><p className="text-sm text-slate-500 py-6 text-center">No messages.</p></Card>
           )}
-          {items.map((m) => (
-            <button
-              key={m._id}
-              onClick={() => openMessage(m)}
-              className={`w-full text-left card p-3 hover:bg-slate-50 transition ${
-                selected?._id === m._id ? 'border-brand-500 border-2' : ''
-              }`}
-            >
-              <div className="flex justify-between items-start gap-2">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{m.subject}</p>
-                  <p className="text-xs text-slate-500 truncate">
-                    {m.studentId?.rollNumber} — {m.studentId?.name || 'Not registered'}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {new Date(m.createdAt).toLocaleString()}
-                  </p>
+          {items.map((m) => {
+            const s = m.studentId;
+            const blocked = s?.contactBlocked;
+            return (
+              <button
+                key={m._id}
+                onClick={() => openMessage(m)}
+                className={`w-full text-left card p-3 hover:bg-slate-50 transition ${
+                  selected?._id === m._id ? 'border-brand-500 border-2' : ''
+                }`}
+              >
+                <div className="flex justify-between items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate">{m.subject}</p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {s?.rollNumber} — {s?.name || 'Not registered'}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">
+                      {new Date(m.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1">
+                    <Badge variant={
+                      m.status === 'REPLIED' ? 'success' :
+                      m.status === 'CLOSED' ? 'default' : 'warning'
+                    }>{m.status}</Badge>
+                    {blocked && (
+                      <Badge variant="danger">Blocked</Badge>
+                    )}
+                  </div>
                 </div>
-                <Badge variant={
-                  m.status === 'REPLIED' ? 'success' :
-                  m.status === 'CLOSED' ? 'default' : 'warning'
-                }>{m.status}</Badge>
-              </div>
-            </button>
-          ))}
+              </button>
+            );
+          })}
         </div>
 
-        {/* Right — selected message + reply */}
+        {/* Right — detail */}
         <div className="lg:col-span-3">
           {!selected ? (
             <Card>
@@ -114,7 +147,7 @@ export default function AdminMessages() {
             </Card>
           ) : (
             <Card>
-              <div className="flex justify-between items-start gap-3 mb-3">
+              <div className="flex justify-between items-start gap-3 mb-3 flex-wrap">
                 <div>
                   <h2 className="text-lg font-semibold">{selected.subject}</h2>
                   <p className="text-xs text-slate-500 mt-1">
@@ -125,14 +158,41 @@ export default function AdminMessages() {
                     Year {selected.studentId?.year} · Batch {selected.studentId?.batch}
                   </p>
                 </div>
-                <button
-                  onClick={() => removeMessage(selected._id)}
-                  className="text-red-500 hover:text-red-700"
-                  title="Delete message"
-                >
-                  <Trash2 size={16} />
-                </button>
+                <div className="flex items-center gap-2">
+                  {selected.studentId?.contactBlocked ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => toggleBlock(selected.studentId, false)}
+                    >
+                      <ShieldCheck size={14} /> Unblock
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="danger"
+                      onClick={() => toggleBlock(selected.studentId, true)}
+                    >
+                      <ShieldOff size={14} /> Block
+                    </Button>
+                  )}
+                  <button
+                    onClick={() => removeMessage(selected._id)}
+                    className="text-red-500 hover:text-red-700"
+                    title="Delete message"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
+
+              {/* Blocked banner */}
+              {selected.studentId?.contactBlocked && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-3">
+                  <b>This student is blocked.</b> They cannot send new messages until unblocked.
+                  {selected.studentId?.contactBlockedAt && (
+                    <> Blocked on {new Date(selected.studentId.contactBlockedAt).toLocaleString()}.</>
+                  )}
+                </div>
+              )}
 
               <div className="bg-slate-50 rounded-lg p-3 text-sm whitespace-pre-wrap">
                 {selected.body}
