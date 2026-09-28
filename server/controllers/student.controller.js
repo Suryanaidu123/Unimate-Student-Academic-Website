@@ -36,7 +36,11 @@ exports.setStatus = async (req, res, next) => {
     return success(res, data, 'Status updated');
   } catch (e) { next(e); }
 };
-
+exports.remove = async (req, res, next) => {
+  try {
+    return success(res, await service.remove(req.params.id, req.user), 'Student deleted');
+  } catch (e) { next(e); }
+};
 exports.bulkImport = async (req, res, next) => {
   try {
     if (!Array.isArray(req.body.rows)) throw ApiError.badRequest('rows array required');

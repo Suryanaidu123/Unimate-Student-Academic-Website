@@ -21,6 +21,7 @@ import StudentTimetable from '../pages/student/Timetable.jsx';
 import StudentExams from '../pages/student/Exams.jsx';
 import StudentNotifications from '../pages/student/Notifications.jsx';
 import StudentProfile from '../pages/student/Profile.jsx';
+import StudentContactAdmin from '../pages/student/ContactAdmin.jsx';
 
 // Faculty pages
 import FacultyDashboard from '../pages/faculty/Dashboard.jsx';
@@ -45,6 +46,7 @@ import AdminNotifications from '../pages/admin/Notifications.jsx';
 import AdminAuditLogs from '../pages/admin/AuditLogs.jsx';
 import BulkStudents from '../pages/admin/BulkStudents.jsx';
 import ProtectedRoute from './ProtectedRoute.jsx';
+import AdminMessages from '../pages/admin/Messages.jsx';
 
 export default function AppRoutes() {
   return (
@@ -75,6 +77,7 @@ export default function AppRoutes() {
         <Route path="timetable" element={<StudentTimetable />} />
         <Route path="exams" element={<StudentExams />} />
         <Route path="notifications" element={<StudentNotifications />} />
+        <Route path="contact-admin" element={<StudentContactAdmin />} /> 
         <Route path="profile" element={<StudentProfile />} />
       </Route>
 
@@ -117,6 +120,7 @@ export default function AppRoutes() {
         <Route path="timetable" element={<AdminTimetable />} />
         <Route path="bulk-students" element={<BulkStudents />} />
         <Route path="exams" element={<AdminExams />} />
+        <Route path="messages" element={<AdminMessages />} /> 
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="audit-logs" element={<AdminAuditLogs />} />
       </Route>

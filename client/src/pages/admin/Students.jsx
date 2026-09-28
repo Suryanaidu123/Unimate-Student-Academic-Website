@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
+import { Pencil, Trash2 } from 'lucide-react';
 import api from '../../services/api.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
@@ -13,8 +14,11 @@ const empty = { rollNumber: '', email: '', academicYear: 2 };
 export default function AdminStudents() {
   const [items, setItems] = useState([]);
   const [q, setQ] = useState('');
-  const [open, setOpen] = useState(false);
+  const [openCreate, setOpenCreate] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
+  const [editing, setEditing] = useState(null); // student object
   const [form, setForm] = useState(empty);
+  const [editForm, setEditForm] = useState({ email: '', name: '' });
 
   function load() {
     api.get(`/students?q=${encodeURIComponent(q)}&limit=200`)
@@ -29,7 +33,7 @@ export default function AdminStudents() {
   }
   useEffect(load, [q]);
 
-  async function onSubmit(e) {
+  async function onCreate(e) {
     e.preventDefault();
     try {
       await api.post('/students', {
@@ -38,11 +42,48 @@ export default function AdminStudents() {
         academicYear: Number(form.academicYear),
       });
       toast.success('Student added');
-      setOpen(false);
+      setOpenCreate(false);
       setForm(empty);
       load();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed');
+    }
+  }
+
+  function openEditModal(row) {
+    setEditing(row);
+    setEditForm({ email: row.email || '', name: row.name || '' });
+    setOpenEdit(true);
+  }
+
+  async function onEdit(e) {
+    e.preventDefault();
+    if (!editing) return;
+    try {
+      await api.put(`/students/${editing._id}`, {
+        email: editForm.email.trim(),
+        name: editForm.name.trim(),
+      });
+      toast.success('Student updated');
+      setOpenEdit(false);
+      setEditing(null);
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed');
+    }
+  }
+
+  async function onDelete(row) {
+    if (!window.confirm(
+      `Delete student ${row.rollNumber}${row.name ? ' (' + row.name + ')' : ''}?\n\n` +
+      `This will also delete their login account, marks, and pending OTPs. This cannot be undone.`
+    )) return;
+    try {
+      await api.delete(`/students/${row._id}`);
+      toast.success('Student deleted');
+      load();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to delete');
     }
   }
 
@@ -61,7 +102,7 @@ export default function AdminStudents() {
         <h1 className="text-2xl font-bold">Students</h1>
         <div className="flex gap-2">
           <Input placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />
-          <Button onClick={() => setOpen(true)}>+ Add Student</Button>
+          <Button onClick={() => setOpenCreate(true)}>+ Add Student</Button>
         </div>
       </div>
 
@@ -82,54 +123,79 @@ export default function AdminStudents() {
                 </Badge>
               ) },
             { key: 'actions', label: '', render: (r) => (
-              <Button variant="secondary" onClick={() => toggleStatus(r)}>
-                {r.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-              </Button>
+              <div className="flex gap-3 items-center">
+                <button
+                  onClick={() => openEditModal(r)}
+                  className="text-brand-600 hover:text-brand-800"
+                  title="Edit"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
+                  onClick={() => toggleStatus(r)}
+                  className="text-xs text-slate-600 hover:text-slate-800 whitespace-nowrap"
+                >
+                  {r.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                </button>
+                <button
+                  onClick={() => onDelete(r)}
+                  className="text-red-500 hover:text-red-700"
+                  title="Delete student"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
             ) },
           ]}
           data={items}
         />
       </Card>
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Add Student">
-        <form onSubmit={onSubmit} className="space-y-3">
-          <Input
-            label="Roll Number"
-            required
-            value={form.rollNumber}
-            onChange={(e) => setForm({ ...form, rollNumber: e.target.value })}
-            placeholder="e.g. 24K61A6101"
-          />
-
-          <Input
-            label="College Email"
-            type="email"
-            required
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="student@college.edu"
-          />
-
+      {/* Add student */}
+      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Add Student">
+        <form onSubmit={onCreate} className="space-y-3">
+          <Input label="Roll Number" required value={form.rollNumber}
+            onChange={(e) => setForm({ ...form, rollNumber: e.target.value })} />
+          <Input label="College Email" type="email" required value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <label className="block">
             <span className="label">Academic Year</span>
-            <select
-              className="input"
-              required
-              value={form.academicYear}
-              onChange={(e) => setForm({ ...form, academicYear: Number(e.target.value) })}
-            >
+            <select className="input" required value={form.academicYear}
+              onChange={(e) => setForm({ ...form, academicYear: Number(e.target.value) })}>
               <option value={2}>2nd Year (Batch 2025-2029)</option>
               <option value={3}>3rd Year (Batch 2024-2028)</option>
               <option value={4}>4th Year (Batch 2023-2027)</option>
             </select>
           </label>
-
           <Button type="submit" className="w-full">Add Student</Button>
-
-          <p className="text-xs text-slate-500">
-            Name and batch are auto-filled. The student will enter their full name during registration.
-          </p>
         </form>
+      </Modal>
+
+      {/* Edit student */}
+      <Modal open={openEdit} onClose={() => setOpenEdit(false)} title="Edit Student">
+        {editing && (
+          <form onSubmit={onEdit} className="space-y-3">
+            <div className="text-xs text-slate-500 bg-slate-50 p-3 rounded">
+              <p><b>Roll Number:</b> {editing.rollNumber}</p>
+              <p><b>Year:</b> {editing.year}</p>
+              <p><b>Batch:</b> {editing.batch}</p>
+            </div>
+            <Input
+              label="College Email"
+              type="email"
+              required
+              value={editForm.email}
+              onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+            />
+            <Input
+              label="Name"
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              placeholder="Leave empty if not registered yet"
+            />
+            <Button type="submit" className="w-full">Save Changes</Button>
+          </form>
+        )}
       </Modal>
     </div>
   );

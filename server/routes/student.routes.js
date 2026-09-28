@@ -14,5 +14,5 @@ router.post('/bulk-import', ctrl.bulkImport);
 router.get('/:id', ctrl.getById);
 router.put('/:id', validate(updateStudentSchema), ctrl.update);
 router.patch('/:id/status', ctrl.setStatus);
-
+router.delete('/:id', ctrl.remove);
 module.exports = router;

@@ -74,8 +74,18 @@ async function remove(userId, id) {
   return Notification.findOneAndDelete({ _id: id, recipientId: userId });
 }
 
-async function createManual({ title, message, type, recipientType, filter, createdBy }) {
-  return fanOut({ title, message, type, recipientType, filter, createdBy });
+async function createManual({ title, message, type, recipientType, filter = {}, year, createdBy }) {
+  // Merge year into filter for convenience
+  const merged = { ...filter };
+  if (year) merged.year = Number(year);
+  return fanOut({
+    title,
+    message,
+    type,
+    recipientType,
+    filter: merged,
+    createdBy,
+  });
 }
 
 module.exports = { fanOut, listForUser, unreadCount, markRead, markAllRead, remove, createManual };

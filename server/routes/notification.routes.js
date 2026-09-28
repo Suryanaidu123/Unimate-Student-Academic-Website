@@ -10,6 +10,6 @@ router.put('/read-all', ctrl.markAllRead);
 router.put('/:id/read', ctrl.markRead);
 router.delete('/:id', ctrl.remove);
 
-router.post('/', requireRole('ADMIN'), ctrl.create);
+router.post('/', requireRole('ADMIN', 'FACULTY'), ctrl.create);
 
 module.exports = router;

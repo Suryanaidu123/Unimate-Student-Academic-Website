@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ClipboardList, GraduationCap, FileText,
-  Calendar, Bell, User, Users, Settings, ScrollText,
+  Calendar, Bell, User, Users, Settings, ScrollText, CalendarDays, Layers,  MessageSquare
 } from 'lucide-react';
 
 const links = {
@@ -12,7 +12,8 @@ const links = {
     { to: '/student/assignments', label: 'Assignments', icon: ClipboardList },
     { to: '/student/notes', label: 'Notes', icon: FileText },
     { to: '/student/timetable', label: 'Timetable', icon: Calendar },
-   { to: '/student/materials', label: 'Academic Materials', icon: FileText },
+    { to: '/student/contact-admin', label: 'Contact Admin', icon: MessageSquare },
+    { to: '/student/materials', label: 'Academic Materials', icon: FileText },
     { to: '/student/exams', label: 'Exams', icon: GraduationCap },
     { to: '/student/notifications', label: 'Notifications', icon: Bell },
     { to: '/student/profile', label: 'Profile', icon: User },
@@ -27,6 +28,7 @@ const links = {
   ADMIN: [
     { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/admin/students', label: 'Students', icon: Users },
+    { to: '/admin/messages', label: 'Student Messages', icon: MessageSquare },
     { to: '/admin/faculty', label: 'Faculty', icon: User },
     { to: '/admin/materials', label: 'Academic Materials', icon: FileText },
     { to: '/admin/subjects', label: 'Subjects & Labs', icon: BookOpen },
