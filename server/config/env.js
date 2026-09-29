@@ -17,10 +17,7 @@ module.exports = {
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD,
   ADMIN_NAME: process.env.ADMIN_NAME || 'Administrator',
 
-  SMTP_HOST: process.env.SMTP_HOST || '',
-  SMTP_PORT: Number(process.env.SMTP_PORT || 587),
-  SMTP_USER: process.env.SMTP_USER || '',
-  SMTP_PASS: process.env.SMTP_PASS || '',
+  BREVO_API_KEY: process.env.BREVO_API_KEY || '',
   SMTP_FROM: process.env.SMTP_FROM || 'UniMate <no-reply@unimate.local>',
 
   OTP_TTL_MINUTES: Number(process.env.OTP_TTL_MINUTES || 10),

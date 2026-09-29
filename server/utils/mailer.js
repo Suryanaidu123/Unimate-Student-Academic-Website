@@ -1,51 +1,48 @@
-const nodemailer = require('nodemailer');
 const env = require('../config/env');
 const logger = require('./logger');
 
-let transporterPromise = null;
+async function sendMail({ to, subject, text, html }) {
+  const apiKey = process.env.BREVO_API_KEY;
 
-async function getTransporter() {
-  if (transporterPromise) return transporterPromise;
+  if (!apiKey) {
+    throw new Error('BREVO_API_KEY is missing in .env');
+  }
 
-  transporterPromise = (async () => {
-    if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
-      const t = nodemailer.createTransport({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        secure: env.SMTP_PORT === 465,
-        auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
-      });
-      logger.info('✉️  Mailer: using SMTP', env.SMTP_HOST);
-      return t;
+  // Extract the email address from "Name <email>" format
+  const senderEmail = env.SMTP_FROM.match(/<(.+)>/)?.[1] || env.SMTP_FROM;
+  const senderName = env.SMTP_FROM.split('<')[0].trim() || 'UniMate';
+
+  const payload = {
+    sender: { name: senderName, email: senderEmail },
+    to: [{ email: to }],
+    subject: subject,
+    htmlContent: html,
+    textContent: text,
+  };
+
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': apiKey,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorBody.message || `Brevo API error: ${response.status}`);
     }
 
-    const testAccount = await nodemailer.createTestAccount();
-    const t = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
-      auth: { user: testAccount.user, pass: testAccount.pass },
-    });
-    logger.info('✉️  Mailer: using Ethereal test inbox');
-    logger.info('    Ethereal user:', testAccount.user);
-    return t;
-  })();
-
-  return transporterPromise;
-}
-
-async function sendMail({ to, subject, text, html }) {
-  const transporter = await getTransporter();
-  const info = await transporter.sendMail({
-    from: env.SMTP_FROM,
-    to,
-    subject,
-    text,
-    html,
-  });
-  const preview = nodemailer.getTestMessageUrl(info);
-  if (preview) logger.info('📬 Preview email:', preview);
-  return info;
+    const data = await response.json();
+    logger.info('Email sent via Brevo API:', data.messageId);
+    return data;
+  } catch (error) {
+    logger.error('Brevo API error:', error.message);
+    throw error;
+  }
 }
 
 module.exports = { sendMail };
