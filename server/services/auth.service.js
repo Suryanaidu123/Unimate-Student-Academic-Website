@@ -323,11 +323,404 @@ async function changePassword(userId, currentPassword, newPassword) {
   await user.save();
   return { ok: true };
 }
+// ---------- Forgot password ----------
+async function initStudentPasswordReset({ rollNumber, email }) {
+  const student = await Student.findOne({ rollNumber });
+  if (!student) {
+    throw ApiError.unprocessable(
+      'This Roll Number is not registered. Please contact the college administration.'
+    );
+  }
+  if (String(student.email).trim().toLowerCase() !== String(email).trim().toLowerCase()) {
+    throw ApiError.unprocessable('The email does not match our records for this Roll Number.');
+  }
 
+  const user = await User.findOne({ studentId: student._id });
+  if (!user) {
+    throw ApiError.unprocessable('No account exists for this student. Please register first.');
+  }
+
+  // Invalidate prior OTPs
+  await OtpRequest.updateMany(
+    { rollNumber, consumed: false },
+    { $set: { consumed: true } }
+  );
+
+  const code = generateOtp();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
+
+  await OtpRequest.create({
+    rollNumber,
+    email: student.email,
+    studentId: student._id,
+    pendingName: '__PASSWORD_RESET__',
+    codeHash,
+    expiresAt,
+  });
+
+  const subject = 'UniMate — Password reset code';
+  const text =
+`Hi ${student.name || 'Student'},
+
+Your UniMate password reset code is: ${code}
+
+This code expires in ${env.OTP_TTL_MINUTES} minutes.
+
+If you didn't request this, ignore this email.
+
+— UniMate`;
+
+  const html = `
+  <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;color:#0f172a">
+    <h2 style="margin:0 0 8px">Password reset code</h2>
+    <p>Your UniMate code is:</p>
+    <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:12px 0;color:#4f46e5">${code}</p>
+    <p>This code expires in ${env.OTP_TTL_MINUTES} minutes.</p>
+  </div>`;
+
+  try {
+    await sendMail({ to: student.email, subject, text, html });
+  } catch (e) {
+    console.error('Failed to send reset email:', e.message);
+    throw ApiError.badRequest('Could not send reset email. Try again later.');
+  }
+
+  return {
+    sentTo: student.email.replace(/(.{2}).+(@.*)/, '$1***$2'),
+    expiresInMinutes: env.OTP_TTL_MINUTES,
+  };
+}
+
+async function verifyStudentPasswordReset({ rollNumber, code, newPassword }) {
+  const req = await OtpRequest
+    .findOne({ rollNumber, consumed: false, pendingName: '__PASSWORD_RESET__' })
+    .sort({ createdAt: -1 })
+    .select('+codeHash');
+
+  if (!req) throw ApiError.unprocessable('No pending reset. Please start again.');
+  if (req.expiresAt < new Date()) throw ApiError.unprocessable('Reset code expired. Please request a new one.');
+  if (req.attempts >= env.OTP_MAX_ATTEMPTS) throw ApiError.forbidden('Too many attempts. Please request a new code.');
+
+  const ok = await bcrypt.compare(code, req.codeHash);
+  if (!ok) {
+    req.attempts += 1;
+    await req.save();
+    const left = Math.max(0, env.OTP_MAX_ATTEMPTS - req.attempts);
+    throw ApiError.unprocessable(`Incorrect code. ${left} attempt(s) left.`);
+  }
+
+  const user = await User.findOne({ studentId: req.studentId });
+  if (!user) throw ApiError.notFound('User account not found.');
+
+  user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await user.save();
+
+  req.consumed = true;
+  await req.save();
+
+  await auditLog.log({
+    actor: { userId: user._id, role: 'STUDENT' },
+    action: 'STUDENT_PASSWORD_RESET',
+    entityType: 'User',
+    entityId: user._id,
+    description: `Password reset for roll ${rollNumber}`,
+  });
+
+  return { ok: true };
+}
+// ---------- Faculty registration (2-step with OTP) ----------
+async function initFacultyRegistration({ employeeId, name, email, designation }) {
+  const faculty = await Faculty.findOne({ employeeId });
+  if (!faculty) {
+    throw ApiError.unprocessable(
+      'This Employee ID is not registered. Please contact the college administration.'
+    );
+  }
+  if (faculty.name) {
+    // already fully registered
+    const existingUser = await User.findOne({ facultyId: faculty._id });
+    if (existingUser) {
+      throw ApiError.conflict('An account already exists for this Employee ID.');
+    }
+  }
+
+  // Reject if another user with this email exists
+  const emailDup = await User.findOne({ email });
+  if (emailDup) throw ApiError.conflict('An account already exists with this email.');
+
+  // Invalidate prior OTPs
+  await OtpRequest.updateMany(
+    { rollNumber: employeeId, consumed: false },
+    { $set: { consumed: true } }
+  );
+
+  const code = generateOtp();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
+
+  await OtpRequest.create({
+    rollNumber: employeeId,
+    email,
+    studentId: faculty._id,       // reuse studentId field as generic "entityId"
+    pendingName: JSON.stringify({ name, designation }),
+    codeHash,
+    expiresAt,
+  });
+
+  const subject = 'UniMate — Verify your faculty account';
+  const text =
+`Hi ${name},
+
+Your UniMate faculty verification code is: ${code}
+
+This code expires in ${env.OTP_TTL_MINUTES} minutes.
+
+If you didn't request this, ignore this email.
+
+— UniMate`;
+
+  const html = `
+  <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;color:#0f172a">
+    <h2>UniMate faculty verification</h2>
+    <p>Hi ${name},</p>
+    <p style="font-size:28px;font-weight:700;letter-spacing:6px;margin:12px 0;color:#4f46e5">${code}</p>
+    <p>This code expires in ${env.OTP_TTL_MINUTES} minutes.</p>
+  </div>`;
+
+  try {
+    await sendMail({ to: email, subject, text, html });
+  } catch (e) {
+    console.error('Failed to send faculty OTP:', e.message);
+    throw ApiError.badRequest('Could not send verification email. Try again later.');
+  }
+
+  return { sentTo: email.replace(/(.{2}).+(@.*)/, '$1***$2'), expiresInMinutes: env.OTP_TTL_MINUTES };
+}
+
+async function verifyFacultyRegistration({ employeeId, code, password }) {
+  const req = await OtpRequest
+    .findOne({ rollNumber: employeeId, consumed: false })
+    .sort({ createdAt: -1 })
+    .select('+codeHash');
+
+  if (!req) throw ApiError.unprocessable('No pending verification. Please start again.');
+  if (req.expiresAt < new Date()) throw ApiError.unprocessable('Verification code expired.');
+  if (req.attempts >= env.OTP_MAX_ATTEMPTS) throw ApiError.forbidden('Too many attempts.');
+
+  const ok = await bcrypt.compare(code, req.codeHash);
+  if (!ok) {
+    req.attempts += 1;
+    await req.save();
+    const left = Math.max(0, env.OTP_MAX_ATTEMPTS - req.attempts);
+    throw ApiError.unprocessable(`Incorrect code. ${left} attempt(s) left.`);
+  }
+
+  const faculty = await Faculty.findById(req.studentId);
+  if (!faculty) throw ApiError.notFound('Faculty record missing.');
+
+  const meta = req.pendingName ? JSON.parse(req.pendingName) : {};
+
+  // Update faculty record with the chosen values
+  faculty.name = meta.name || faculty.name || '';
+  faculty.email = req.email;
+  faculty.designation = meta.designation || faculty.designation || 'Assistant Professor';
+  faculty.status = 'ACTIVE';
+  await faculty.save();
+
+  // Create the User account
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const user = await User.create({
+    email: faculty.email,
+    passwordHash,
+    role: 'FACULTY',
+    facultyId: faculty._id,
+    status: 'ACTIVE',
+  });
+
+  req.consumed = true;
+  await req.save();
+
+  await auditLog.log({
+    actor: { userId: user._id, role: 'FACULTY' },
+    action: 'FACULTY_REGISTER_VERIFIED',
+    entityType: 'User',
+    entityId: user._id,
+    description: `Faculty account verified for ${faculty.employeeId}`,
+  });
+
+  const accessToken = signAccess({ sub: user._id, role: user.role, facultyId: faculty._id });
+
+  return {
+    user: publicUser(user),
+    faculty: {
+      employeeId: faculty.employeeId,
+      name: faculty.name,
+      email: faculty.email,
+      designation: faculty.designation,
+    },
+    accessToken,
+  };
+}
+async function initFacultyPasswordReset({ employeeId, email }) {
+  const faculty = await Faculty.findOne({ employeeId });
+  if (!faculty) {
+    throw ApiError.unprocessable('This Employee ID is not registered.');
+  }
+  if (!faculty.email || faculty.email.toLowerCase() !== String(email).trim().toLowerCase()) {
+    throw ApiError.unprocessable('The email does not match our records for this Employee ID.');
+  }
+
+  const user = await User.findOne({ facultyId: faculty._id });
+  if (!user) throw ApiError.unprocessable('No account exists for this faculty.');
+
+  await OtpRequest.updateMany(
+    { rollNumber: employeeId, consumed: false },
+    { $set: { consumed: true } }
+  );
+
+  const code = generateOtp();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
+
+  await OtpRequest.create({
+    rollNumber: employeeId,
+    email: faculty.email,
+    studentId: faculty._id,   // reused as generic entityId
+    pendingName: '__FACULTY_RESET__',
+    codeHash,
+    expiresAt,
+  });
+
+  const subject = 'UniMate — Faculty password reset';
+  const text = `Hi ${faculty.name},\n\nYour UniMate password reset code is: ${code}\n\nThis code expires in ${env.OTP_TTL_MINUTES} minutes.\n\n— UniMate`;
+  const html = `<p>Your code: <b style="font-size:24px">${code}</b></p>`;
+
+  try { await sendMail({ to: faculty.email, subject, text, html }); }
+  catch (e) { throw ApiError.badRequest('Could not send reset email.'); }
+
+  return {
+    sentTo: faculty.email.replace(/(.{2}).+(@.*)/, '$1***$2'),
+    expiresInMinutes: env.OTP_TTL_MINUTES,
+  };
+}
+
+async function verifyFacultyPasswordReset({ employeeId, code, newPassword }) {
+  const req = await OtpRequest
+    .findOne({ rollNumber: employeeId, consumed: false, pendingName: '__FACULTY_RESET__' })
+    .sort({ createdAt: -1 })
+    .select('+codeHash');
+
+  if (!req) throw ApiError.unprocessable('No pending reset.');
+  if (req.expiresAt < new Date()) throw ApiError.unprocessable('Reset code expired.');
+  if (req.attempts >= env.OTP_MAX_ATTEMPTS) throw ApiError.forbidden('Too many attempts.');
+
+  const ok = await bcrypt.compare(code, req.codeHash);
+  if (!ok) {
+    req.attempts += 1;
+    await req.save();
+    throw ApiError.unprocessable(`Incorrect code. ${Math.max(0, env.OTP_MAX_ATTEMPTS - req.attempts)} left.`);
+  }
+
+  const user = await User.findOne({ facultyId: req.studentId });
+  if (!user) throw ApiError.notFound('Faculty user not found.');
+
+  user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await user.save();
+
+  req.consumed = true;
+  await req.save();
+
+  await auditLog.log({
+    actor: { userId: user._id, role: 'FACULTY' },
+    action: 'FACULTY_PASSWORD_RESET',
+    entityType: 'User',
+    entityId: user._id,
+    description: `Faculty password reset for ${employeeId}`,
+  });
+
+  return { ok: true };
+}
+const ADMIN_RECOVERY_EMAIL = 'suryanaidu652@gmail.com';
+
+async function initAdminPasswordReset({ email }) {
+  const user = await User.findOne({ email: String(email).trim().toLowerCase(), role: 'ADMIN' });
+  if (!user) {
+    // Do not reveal whether the email exists — respond success regardless
+    return { sentTo: ADMIN_RECOVERY_EMAIL.replace(/(.{2}).+(@.*)/, '$1***$2') };
+  }
+
+  // Always send to the recovery email, regardless of the admin's own address
+  await OtpRequest.updateMany(
+    { rollNumber: `ADMIN_${user._id}`, consumed: false },
+    { $set: { consumed: true } }
+  );
+
+  const code = generateOtp();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
+
+  await OtpRequest.create({
+    rollNumber: `ADMIN_${user._id}`,
+    email: ADMIN_RECOVERY_EMAIL,
+    studentId: user._id,
+    pendingName: '__ADMIN_RESET__',
+    codeHash,
+    expiresAt,
+  });
+
+  const subject = 'UniMate — Admin password reset';
+  const text = `Your UniMate admin reset code is: ${code}\n\nExpires in ${env.OTP_TTL_MINUTES} minutes.`;
+  const html = `<p>Your code: <b style="font-size:24px">${code}</b></p>`;
+
+  try { await sendMail({ to: ADMIN_RECOVERY_EMAIL, subject, text, html }); }
+  catch { throw ApiError.badRequest('Could not send reset email.'); }
+
+  return { sentTo: ADMIN_RECOVERY_EMAIL.replace(/(.{2}).+(@.*)/, '$1***$2') };
+}
+
+async function verifyAdminPasswordReset({ email, code, newPassword }) {
+  const user = await User.findOne({ email: String(email).trim().toLowerCase(), role: 'ADMIN' });
+  if (!user) throw ApiError.unprocessable('Invalid request.');
+
+  const req = await OtpRequest
+    .findOne({ rollNumber: `ADMIN_${user._id}`, consumed: false, pendingName: '__ADMIN_RESET__' })
+    .sort({ createdAt: -1 })
+    .select('+codeHash');
+
+  if (!req) throw ApiError.unprocessable('No pending reset.');
+  if (req.expiresAt < new Date()) throw ApiError.unprocessable('Reset code expired.');
+
+  const ok = await bcrypt.compare(code, req.codeHash);
+  if (!ok) { req.attempts += 1; await req.save(); throw ApiError.unprocessable('Incorrect code.'); }
+
+  user.passwordHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await user.save();
+  req.consumed = true;
+  await req.save();
+
+  await auditLog.log({
+    actor: { userId: user._id, role: 'ADMIN' },
+    action: 'ADMIN_PASSWORD_RESET',
+    entityType: 'User', entityId: user._id,
+    description: `Admin password reset for ${user.email}`,
+  });
+
+  return { ok: true };
+}
 module.exports = {
   registerStudent,
   initStudentRegistration,
   verifyStudentRegistration,
+  initStudentPasswordReset,
+  initAdminPasswordReset,
+  verifyAdminPasswordReset,
+  initFacultyPasswordReset,
+  verifyFacultyPasswordReset,
+  initFacultyRegistration,
+  verifyFacultyRegistration,
+  verifyStudentPasswordReset,
+  verifyFacultyPasswordReset,
   loginEmailPassword,
   loginFaculty,
   me,

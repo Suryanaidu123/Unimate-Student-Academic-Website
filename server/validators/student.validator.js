@@ -10,6 +10,7 @@ const createStudentSchema = z.object({
 const updateStudentSchema = z.object({
   email: z.string().email().optional(),
   name: z.string().max(120).optional(),
+  year: z.number().int().min(2).max(4).optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
 }).strict();
 

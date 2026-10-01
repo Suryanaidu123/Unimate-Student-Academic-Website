@@ -28,12 +28,26 @@ export default function FacultyLogin() {
 
   return (
     <AuthLayout title="Faculty Login" subtitle="Use your official Employee ID."
-      footer={<Link className="text-brand-600 font-medium" to="/">← Back to Home</Link>}>
+      footer={
+  <>
+    New faculty?{' '}
+    <Link className="text-brand-600 font-medium" to="/auth/faculty/register">
+      Create account
+    </Link>
+    {' · '}
+    <Link className="text-brand-600 font-medium" to="/">Home</Link>
+  </>
+}>
       <form onSubmit={onSubmit} className="space-y-4">
         <Input label="Employee ID" required value={form.employeeId}
                onChange={(e) => setForm({ ...form, employeeId: e.target.value })} />
         <Input label="Password" type="password" required value={form.password}
                onChange={(e) => setForm({ ...form, password: e.target.value })} />
+               <div className="text-right">
+  <Link to="/auth/faculty/forgot-password" className="text-xs text-brand-600 hover:underline">
+    Forgot Password?
+  </Link>
+</div>
         <Button type="submit" disabled={loading} className="w-full">{loading ? 'Signing in…' : 'Sign in'}</Button>
       </form>
     </AuthLayout>

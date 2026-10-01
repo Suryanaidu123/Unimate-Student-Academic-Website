@@ -23,28 +23,31 @@ async function ensureDefaultCourse(departmentId) {
   return course;
 }
 
-async function list({ q, year, type, semesterId, facultyId, status, page = 1, limit = 50 }) {
+async function list({ q, year, type, semester, semesterId, facultyId, status, page = 1, limit = 50 }) {
   const query = {};
   if (year) query.year = Number(year);
   if (type) query.type = type;
+  if (semester) query.semester = Number(semester);
   if (semesterId) query.semesterId = semesterId;
   if (facultyId) query.facultyId = facultyId;
   if (status) query.status = status;
-  if (q) query.$or = [
-    { subjectName: new RegExp(q, 'i') },
-    { subjectCode: new RegExp(q, 'i') },
-  ];
+  if (q) {
+    query.$or = [
+      { subjectName: new RegExp(q, 'i') },
+      { subjectCode: new RegExp(q, 'i') },
+    ];
+  }
 
   const [items, total] = await Promise.all([
     Subject.find(query)
       .populate('facultyId', 'name employeeId')
-      .sort({ subjectCode: 1 })          // alphabetical first
+      .sort({ subjectCode: 1 })
       .skip((page - 1) * limit)
       .limit(limit),
     Subject.countDocuments(query),
   ]);
 
-  // THEORY first, then LAB (stable within each group by subjectCode)
+  // Theory first, then Lab
   items.sort((a, b) => {
     const rank = (s) => (s.type === 'LAB' ? 1 : 0);
     if (rank(a) !== rank(b)) return rank(a) - rank(b);
@@ -71,12 +74,23 @@ async function create(data, actor) {
     : await ensureDefaultCourse(dep._id);
   if (!course) throw ApiError.badRequest('Invalid course');
 
+  const year = Number(data.year);
+  if (![2, 3, 4].includes(year)) throw ApiError.badRequest('Year must be 2, 3 or 4');
+
+  // Default semester to the first semester of the year
+  const semester = data.semester ? Number(data.semester) : 2 * year - 1;
+  const validSems = [2 * year - 1, 2 * year];
+  if (!validSems.includes(semester)) {
+    throw ApiError.badRequest(`Semester for Year ${year} must be ${validSems[0]} or ${validSems[1]}`);
+  }
+
   const payload = {
     subjectName: data.subjectName.trim(),
     subjectCode: data.subjectCode.trim().toUpperCase(),
     type: data.type || 'THEORY',
     credits: data.credits,
-    year: data.year,
+    year,
+    semester,
     departmentId: dep._id,
     courseId: course._id,
     status: data.status || 'ACTIVE',
@@ -90,7 +104,8 @@ async function create(data, actor) {
   const s = await Subject.create(payload);
   await auditLog.log({
     actor, action: 'SUBJECT_CREATE', entityType: 'Subject', entityId: s._id,
-    description: `Created ${s.type} ${s.subjectCode}`, newValue: payload,
+    description: `Created ${s.type} ${s.subjectCode} for Year ${year} Sem ${semester}`,
+    newValue: payload,
   });
   return s;
 }
@@ -110,9 +125,9 @@ async function update(id, data, actor) {
   }
   if (data.type !== undefined) patch.type = data.type;
   if (data.credits !== undefined) patch.credits = data.credits;
-  if (data.year !== undefined) patch.year = data.year;
+  if (data.year !== undefined) patch.year = Number(data.year);
+  if (data.semester !== undefined) patch.semester = Number(data.semester);
 
-  // facultyId can be set to null (unassign) or an ObjectId
   if (data.facultyId !== undefined) {
     if (data.facultyId === null || data.facultyId === '') {
       patch.facultyId = null;
@@ -129,8 +144,7 @@ async function update(id, data, actor) {
   await auditLog.log({
     actor, action: 'SUBJECT_UPDATE', entityType: 'Subject', entityId: s._id,
     description: `Updated ${s.subjectCode}`,
-    oldValue: old.toObject(),
-    newValue: patch,
+    oldValue: old.toObject(), newValue: patch,
   });
   return s;
 }
@@ -139,7 +153,6 @@ async function remove(id, actor) {
   const s = await Subject.findById(id);
   if (!s) throw ApiError.notFound('Subject not found');
 
-  // Guard: block deletion if marks exist for this subject
   const Marks = require('../models/Marks.model');
   const marksCount = await Marks.countDocuments({ subjectId: id });
   if (marksCount > 0) {

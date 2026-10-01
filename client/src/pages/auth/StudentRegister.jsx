@@ -178,7 +178,13 @@ export default function StudentRegister() {
           placeholder="••••••"
           className="text-center tracking-[0.5em] text-lg"
         />
-
+<div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg p-3 flex items-start gap-2">
+  <span className="text-base leading-none">📩</span>
+  <p>
+    <b>OTP not received?</b> Please check your <b>Spam/Junk folder</b> once.
+    Emails from a new sender sometimes land there.
+  </p>
+</div>
         <Input
           label="Choose a Password"
           type="password"
@@ -196,7 +202,7 @@ export default function StudentRegister() {
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
         />
-
+        
         <Button type="submit" className="w-full" disabled={loading}>
           <ShieldCheck size={16} /> {loading ? 'Verifying…' : 'Create Account'}
         </Button>

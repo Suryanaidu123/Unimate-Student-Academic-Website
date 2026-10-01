@@ -8,8 +8,9 @@ exports.getById = async (req, res, next) => {
   try { return success(res, await service.getById(req.params.id)); } catch (e) { next(e); }
 };
 exports.create = async (req, res, next) => {
-  try { return success(res, await service.create(req.body, req.user, req.body.initialPassword), 'Faculty created', 201); }
-  catch (e) { next(e); }
+  try {
+    return success(res, await service.create(req.body, req.user, req.body.initialPassword), 'Faculty record created', 201);
+  } catch (e) { next(e); }
 };
 exports.update = async (req, res, next) => {
   try { return success(res, await service.update(req.params.id, req.body, req.user), 'Faculty updated'); }

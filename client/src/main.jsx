@@ -5,6 +5,7 @@ import { Toaster } from 'react-hot-toast';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
 import { NotificationProvider } from './context/NotificationContext.jsx';
+import { SemesterProvider } from './context/SemesterContext.jsx';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -12,8 +13,10 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
-          <App />
-          <Toaster position="top-right" />
+          <SemesterProvider>
+            <App />
+            <Toaster position="top-right" />
+          </SemesterProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

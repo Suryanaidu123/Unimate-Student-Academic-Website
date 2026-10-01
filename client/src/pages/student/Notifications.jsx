@@ -6,7 +6,7 @@ import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
-
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 const TYPE_VARIANTS = {
   IMPORTANT_ANNOUNCEMENT: 'danger',
   ASSIGNMENT_CREATED: 'brand',
@@ -39,7 +39,8 @@ export default function StudentNotifications() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
-  const [filter, setFilter] = useState('ALL'); // 'ALL' | 'UNREAD'
+  const [filter, setFilter] = useState('ALL');
+  const [confirmId, setConfirmId] = useState(null); // 'ALL' | 'UNREAD'
   const { refreshUnread } = useNotifications();
 
   function load() {
@@ -89,20 +90,19 @@ export default function StudentNotifications() {
     }
   }
 
-  async function remove(id) {
-    if (!window.confirm('Delete this notification?')) return;
-    setBusyId(id);
-    try {
-      await api.delete(`/notifications/${id}`);
-      setItems((prev) => prev.filter((n) => n._id !== id));
-      await refreshUnread();
-      toast.success('Deleted');
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to delete');
-    } finally {
-      setBusyId(null);
-    }
+ async function remove(id) {
+  setBusyId(id);
+  try {
+    await api.delete(`/notifications/${id}`);
+    setItems((prev) => prev.filter((n) => n._id !== id));
+    await refreshUnread();
+    toast.success('Deleted');
+  } catch (err) {
+    toast.error(err.response?.data?.message || 'Failed to delete');
+  } finally {
+    setBusyId(null);
   }
+}
 
   return (
     <div className="space-y-4">
@@ -208,20 +208,34 @@ export default function StudentNotifications() {
                       <Check size={14} />
                     </Button>
                   )}
-                  <Button
-                    variant="danger"
-                    onClick={() => remove(n._id)}
-                    disabled={busyId === n._id}
-                    title="Delete"
-                  >
-                    <Trash2 size={14} />
+                 <Button
+                        variant="danger"
+                        onClick={() => setConfirmId(n._id)}
+                        disabled={busyId === n._id}
+                        title="Delete"
+                             >
+                <Trash2 size={14} />
                   </Button>
                 </div>
               </div>
             </Card>
           ))}
         </div>
-      )}
+           )}
+
+      <ConfirmDialog
+        open={!!confirmId}
+        title="Delete notification?"
+        message="This notification will be permanently removed."
+        confirmText="Delete"
+        variant="danger"
+        onCancel={() => setConfirmId(null)}
+        onConfirm={() => {
+          const id = confirmId;
+          setConfirmId(null);
+          remove(id);
+        }}
+      />
     </div>
   );
 }

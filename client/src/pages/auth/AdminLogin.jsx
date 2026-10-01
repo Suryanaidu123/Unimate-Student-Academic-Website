@@ -34,6 +34,11 @@ export default function AdminLogin() {
                onChange={(e) => setForm({ ...form, email: e.target.value })} />
         <Input label="Password" type="password" required value={form.password}
                onChange={(e) => setForm({ ...form, password: e.target.value })} />
+               <div className="text-right">
+  <Link to="/auth/admin/forgot-password" className="text-xs text-brand-600 hover:underline">
+    Forgot Password?
+  </Link>
+</div>
         <Button type="submit" disabled={loading} className="w-full">{loading ? 'Signing in…' : 'Sign in'}</Button>
       </form>
     </AuthLayout>

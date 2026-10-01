@@ -1,5 +1,6 @@
 const { z } = require('zod');
 
+// Full faculty record (used after registration completes)
 const createFacultySchema = z.object({
   employeeId: z.string().min(2).trim(),
   name: z.string().min(2).trim(),
@@ -11,6 +12,11 @@ const createFacultySchema = z.object({
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
 });
 
+// Stub: admin only enters Employee ID
+const createFacultyStubSchema = z.object({
+  employeeId: z.string().min(2).trim(),
+}).strict();
+
 const updateFacultySchema = createFacultySchema.partial();
 
-module.exports = { createFacultySchema, updateFacultySchema };
+module.exports = { createFacultySchema, createFacultyStubSchema, updateFacultySchema };

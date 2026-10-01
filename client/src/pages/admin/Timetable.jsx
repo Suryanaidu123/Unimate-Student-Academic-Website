@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Plus, Trash2, X, Settings } from 'lucide-react';
+import { Plus, Trash2, X, Settings, RotateCcw } from 'lucide-react';
 import api from '../../services/api.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import Input from '../../components/ui/Input.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import Badge from '../../components/ui/Badge.jsx';
+import { useSemester, SEMESTER_KEYS } from '../../context/SemesterContext.jsx';
 
 const ALL_DAYS = [
   { key: 'MON', label: 'Monday' },
@@ -19,75 +20,107 @@ const ALL_DAYS = [
 
 const SECTIONS = ['A', 'B', 'C', 'D'];
 
-// localStorage key per year+section
-const cfgKey = (year, section) => `unimate_tt_config_${year}_${section}`;
+const DEFAULT_PERIODS = [
+  { startTime: '09:00', endTime: '09:50', kind: 'CLASS' },
+  { startTime: '09:50', endTime: '10:40', kind: 'CLASS' },
+  { startTime: '10:40', endTime: '10:50', kind: 'BREAK' },
+  { startTime: '10:50', endTime: '11:40', kind: 'CLASS' },
+  { startTime: '11:40', endTime: '12:30', kind: 'CLASS' },
+  { startTime: '12:30', endTime: '13:30', kind: 'LUNCH' },
+  { startTime: '13:30', endTime: '14:20', kind: 'CLASS' },
+  { startTime: '14:20', endTime: '15:10', kind: 'CLASS' },
+  { startTime: '15:10', endTime: '16:00', kind: 'CLASS' },
+];
 
-function loadConfig(year, section) {
+const cfgKey = (year, semester, section) => `unimate_tt_config_${year}_${semester}_${section}`;
+
+function loadConfig(year, semester, section) {
   try {
-    const raw = localStorage.getItem(cfgKey(year, section));
+    const raw = localStorage.getItem(cfgKey(year, semester, section));
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 }
 
-function saveConfig(year, section, cfg) {
-  localStorage.setItem(cfgKey(year, section), JSON.stringify(cfg));
+function saveConfig(year, semester, section, cfg) {
+  localStorage.setItem(cfgKey(year, semester, section), JSON.stringify(cfg));
+}
+
+function normalizeTime(str) {
+  if (!str) return '';
+  const parts = String(str).trim().split(':');
+  if (parts.length !== 2) return String(str).trim();
+  const h = String(parts[0]).padStart(2, '0');
+  const m = String(parts[1]).padStart(2, '0');
+  return `${h}:${m}`;
+}
+
+function toMinutes(str) {
+  const s = normalizeTime(str);
+  const [h, m] = s.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return -1;
+  return h * 60 + m;
+}
+
+function isValidTime(str) {
+  const s = normalizeTime(str);
+  return /^\d{2}:\d{2}$/.test(s) && toMinutes(s) >= 0;
+}
+
+function to12h(t) {
+  if (!t) return '';
+  const [hh, mm] = normalizeTime(t).split(':').map(Number);
+  const suffix = hh >= 12 ? 'PM' : 'AM';
+  const h12 = hh % 12 || 12;
+  return `${h12}:${String(mm).padStart(2, '0')} ${suffix}`;
 }
 
 export default function AdminTimetable() {
-  const [year, setYear] = useState(2);
+  const { year, semester, setKey } = useSemester();
+  const activeKey = SEMESTER_KEYS.find((s) => s.year === year && s.semester === semester);
+
   const [section, setSection] = useState('A');
 
-  // config = { days: ['MON', ...], periods: [{startTime, endTime}, ...] }
   const [config, setConfig] = useState(null);
   const [showSetup, setShowSetup] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
-  // Draft state inside the setup modal
   const [draftDays, setDraftDays] = useState(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']);
   const [draftPeriods, setDraftPeriods] = useState([]);
-  const [newPeriod, setNewPeriod] = useState({ startTime: '09:00', endTime: '10:00' });
+  const [newPeriod, setNewPeriod] = useState({ startTime: '09:00', endTime: '09:50', kind: 'CLASS' });
 
-  // Grid data
   const [slots, setSlots] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [faculties, setFaculties] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Cell modal
   const [cellOpen, setCellOpen] = useState(false);
   const [editingSlot, setEditingSlot] = useState(null);
   const [cellTarget, setCellTarget] = useState(null);
-  const [cellForm, setCellForm] = useState({ subjectId: '', facultyId: '', room: '' });
+  const [cellForm, setCellForm] = useState({ subjectId: '', facultyId: '' });
   const [saving, setSaving] = useState(false);
 
-  // ----------------------------------------------------------------
-  // When year/section changes, load existing config
-  // ----------------------------------------------------------------
+  // Reload layout config whenever (year, semester, section) changes
   useEffect(() => {
-    const cfg = loadConfig(year, section);
+    const cfg = loadConfig(year, semester, section);
     setConfig(cfg);
     if (!cfg) {
       setShowSetup(true);
-      // seed draft with a sensible default so admin can just click Generate
       setDraftDays(['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']);
-      setDraftPeriods([
-        { startTime: '09:00', endTime: '10:00' },
-        { startTime: '10:00', endTime: '11:00' },
-        { startTime: '11:15', endTime: '12:15' },
-        { startTime: '12:15', endTime: '13:15' },
-      ]);
+      setDraftPeriods(DEFAULT_PERIODS);
+      setNewPeriod({ startTime: '16:00', endTime: '16:50', kind: 'CLASS' });
     }
-  }, [year, section]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year, semester, section]);
 
-  // ----------------------------------------------------------------
-  // Load data whenever config is set (i.e. grid is visible)
-  // ----------------------------------------------------------------
+  // Load slots and lookups
   useEffect(() => {
     if (!config) return;
     let cancelled = false;
     setLoading(true);
     Promise.all([
-      api.get(`/timetable?year=${year}&section=${section}`),
-      api.get(`/subjects?year=${year}&limit=200`),
+      api.get(`/timetable?year=${year}&semester=${semester}&section=${section}`),
+      api.get(`/subjects?year=${year}&semester=${semester}&limit=200`),
       api.get('/faculty?limit=200'),
     ])
       .then(([tRes, sRes, fRes]) => {
@@ -99,20 +132,12 @@ export default function AdminTimetable() {
       .catch((err) => toast.error(err.response?.data?.message || 'Failed to load'))
       .finally(() => !cancelled && setLoading(false));
     return () => { cancelled = true; };
-  }, [config, year, section]);
+  }, [config, year, semester, section]);
 
-  // ----------------------------------------------------------------
-  // Setup modal actions
-  // ----------------------------------------------------------------
   function openSetup() {
     const existing = config || {
       days: ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'],
-      periods: [
-        { startTime: '09:00', endTime: '10:00' },
-        { startTime: '10:00', endTime: '11:00' },
-        { startTime: '11:15', endTime: '12:15' },
-        { startTime: '12:15', endTime: '13:15' },
-      ],
+      periods: DEFAULT_PERIODS,
     };
     setDraftDays(existing.days);
     setDraftPeriods(existing.periods);
@@ -120,88 +145,142 @@ export default function AdminTimetable() {
   }
 
   function toggleDraftDay(key) {
-    setDraftDays((prev) =>
-      prev.includes(key)
-        ? prev.filter((d) => d !== key)
-        : [...ALL_DAYS.map((d) => d.key).filter((k) => prev.includes(k) || k === key)]
-    );
+    setDraftDays((prev) => prev.includes(key) ? prev.filter((d) => d !== key) : [...prev, key]);
   }
 
   function addDraftPeriod() {
-    const { startTime, endTime } = newPeriod;
-    if (!startTime || !endTime) return;
-    if (startTime >= endTime) return toast.error('End time must be after start');
-    if (draftPeriods.some((p) => p.startTime === startTime)) return toast.error('Start time already exists');
-    const next = [...draftPeriods, { startTime, endTime }].sort((a, b) =>
-      a.startTime.localeCompare(b.startTime)
-    );
+    const start = normalizeTime(newPeriod.startTime);
+    const end = normalizeTime(newPeriod.endTime);
+    const kind = newPeriod.kind || 'CLASS';
+    if (!start || !end) return toast.error('Enter both start and end time');
+    if (!isValidTime(start) || !isValidTime(end)) return toast.error('Use HH:MM format');
+    const s = toMinutes(start);
+    const e = toMinutes(end);
+    if (e <= s) return toast.error('End time must be after start time');
+    if (draftPeriods.some((p) => normalizeTime(p.startTime) === start)) {
+      return toast.error(`A period starting at ${to12h(start)} already exists`);
+    }
+    const next = [...draftPeriods, { startTime: start, endTime: end, kind }]
+      .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
     setDraftPeriods(next);
-    setNewPeriod({ startTime: endTime, endTime: '' });
+    setNewPeriod({ startTime: end, endTime: '', kind: 'CLASS' });
   }
 
   function removeDraftPeriod(startTime) {
     setDraftPeriods(draftPeriods.filter((p) => p.startTime !== startTime));
   }
 
+  function changeDraftKind(startTime, kind) {
+    setDraftPeriods((prev) => prev.map((p) =>
+      p.startTime === startTime ? { ...p, kind } : p
+    ));
+  }
+
+  function addPresetPeriods() {
+    setDraftPeriods(DEFAULT_PERIODS);
+    setNewPeriod({ startTime: '16:00', endTime: '16:50', kind: 'CLASS' });
+    toast.success('Default periods loaded');
+  }
+
+  function clearDraftPeriods() {
+    setDraftPeriods([]);
+  }
+
   function applyConfig() {
     if (draftDays.length === 0) return toast.error('Pick at least one day');
     if (draftPeriods.length === 0) return toast.error('Add at least one time period');
-
-    // Keep days in Mon→Sat order
     const orderedDays = ALL_DAYS.map((d) => d.key).filter((k) => draftDays.includes(k));
-    const cfg = { days: orderedDays, periods: draftPeriods };
-    saveConfig(year, section, cfg);
+    const sortedPeriods = [...draftPeriods]
+      .map((p) => ({
+        startTime: normalizeTime(p.startTime),
+        endTime: normalizeTime(p.endTime),
+        kind: p.kind || 'CLASS',
+      }))
+      .sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime));
+    const cfg = { days: orderedDays, periods: sortedPeriods };
+    saveConfig(year, semester, section, cfg);
     setConfig(cfg);
     setShowSetup(false);
     toast.success('Timetable layout saved');
   }
 
-  function resetConfig() {
-    if (!window.confirm('Reset layout for this year + section? Cells will not be deleted.')) return;
-    localStorage.removeItem(cfgKey(year, section));
-    setConfig(null);
+  async function performReset() {
+    setResetting(true);
+    try {
+      localStorage.removeItem(cfgKey(year, semester, section));
+      setConfig(null);
+      setShowReset(false);
+      toast.success('Layout reset');
+    } finally {
+      setResetting(false);
+    }
   }
 
-  // ----------------------------------------------------------------
-  // Cell handling
-  // ----------------------------------------------------------------
   function findSlot(day, startTime) {
     return slots.find((s) => s.day === day && s.startTime === startTime);
   }
 
-  function openCell(day, period) {
+  async function openCell(day, period) {
     const existing = findSlot(day, period.startTime);
     setCellTarget({ day, ...period });
+
+    if (period.kind === 'BREAK' || period.kind === 'LUNCH') {
+      try {
+        if (existing) await api.delete(`/timetable/${existing._id}`);
+        await api.post('/timetable', {
+          year: Number(year),
+          semester: Number(semester),
+          section,
+          day,
+          startTime: period.startTime,
+          endTime: period.endTime,
+          periodType: period.kind,
+          isBreak: true,
+        });
+        toast.success(`${period.kind === 'LUNCH' ? 'Lunch' : 'Break'} marked`);
+        await reloadSlots();
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Failed');
+      }
+      return;
+    }
+
     if (existing) {
       setEditingSlot(existing);
       setCellForm({
-        subjectId: existing.subjectId?._id || existing.subjectId,
-        facultyId: existing.facultyId?._id || existing.facultyId,
-        room: existing.room,
+        subjectId: existing.subjectId?._id || existing.subjectId || '',
+        facultyId: existing.facultyId?._id || existing.facultyId || '',
       });
     } else {
       setEditingSlot(null);
-      setCellForm({ subjectId: '', facultyId: '', room: '' });
+      setCellForm({ subjectId: '', facultyId: '' });
     }
     setCellOpen(true);
   }
 
+  async function reloadSlots() {
+    const tRes = await api.get(`/timetable?year=${year}&semester=${semester}&section=${section}`);
+    setSlots(tRes.data.data || []);
+  }
+
   async function saveCell(e) {
     e.preventDefault();
-    if (!cellForm.subjectId || !cellForm.facultyId || !cellForm.room) {
-      return toast.error('All fields are required');
+    if (!cellForm.subjectId || !cellForm.facultyId) {
+      return toast.error('Subject and Faculty are required');
     }
     setSaving(true);
     try {
       const payload = {
         subjectId: cellForm.subjectId,
         facultyId: cellForm.facultyId,
-        room: cellForm.room,
         year: Number(year),
+        semester: Number(semester),
         section,
         day: cellTarget.day,
         startTime: cellTarget.startTime,
         endTime: cellTarget.endTime,
+        periodType: 'CLASS',
+        isBreak: false,
       };
       if (editingSlot) {
         await api.put(`/timetable/${editingSlot._id}`, payload);
@@ -211,9 +290,7 @@ export default function AdminTimetable() {
         toast.success('Slot added');
       }
       setCellOpen(false);
-      // reload slots only
-      const tRes = await api.get(`/timetable?year=${year}&section=${section}`);
-      setSlots(tRes.data.data || []);
+      await reloadSlots();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to save');
     } finally {
@@ -223,13 +300,11 @@ export default function AdminTimetable() {
 
   async function deleteCell() {
     if (!editingSlot) return;
-    if (!window.confirm('Delete this slot?')) return;
     try {
       await api.delete(`/timetable/${editingSlot._id}`);
       toast.success('Slot removed');
       setCellOpen(false);
-      const tRes = await api.get(`/timetable?year=${year}&section=${section}`);
-      setSlots(tRes.data.data || []);
+      await reloadSlots();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete');
     }
@@ -239,11 +314,14 @@ export default function AdminTimetable() {
 
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex flex-wrap justify-between items-center gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Timetable</h1>
           <p className="text-sm text-slate-500">
-            Configure days and time slots for each year + section, then fill in subjects.
+            {activeKey
+              ? `Managing ${activeKey.label} · ${activeKey.fullLabel} · Section ${section}`
+              : 'Managing timetable'}
           </p>
         </div>
         <div className="flex gap-2">
@@ -251,37 +329,55 @@ export default function AdminTimetable() {
             <Settings size={16} /> Configure Layout
           </Button>
           {config && (
-            <Button variant="danger" onClick={resetConfig}>Reset</Button>
+            <Button variant="danger" onClick={() => setShowReset(true)}>
+              <RotateCcw size={16} /> Reset
+            </Button>
           )}
         </div>
       </div>
 
-      {/* Year + Section picker */}
-      <Card>
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="block">
-            <span className="label">Year</span>
-            <select className="input" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-              <option value={2}>2nd Year</option>
-              <option value={3}>3rd Year</option>
-              <option value={4}>4th Year</option>
-            </select>
-          </label>
-          <label className="block">
-            <span className="label">Section</span>
-            <select className="input" value={section} onChange={(e) => setSection(e.target.value)}>
-              {SECTIONS.map((s) => <option key={s} value={s}>Section {s}</option>)}
-            </select>
-          </label>
+      {/* Semester switcher */}
+      <Card title="Semester">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          {SEMESTER_KEYS.map((s) => {
+            const isActive = s.year === year && s.semester === semester;
+            return (
+              <button
+                key={s.key}
+                type="button"
+                onClick={() => setKey(s.key)}
+                className={`text-left rounded-lg border px-3 py-2 text-sm transition ${
+                  isActive
+                    ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+                    : 'bg-white text-slate-700 border-slate-200 hover:border-brand-400'
+                }`}
+              >
+                <p className="font-semibold">{s.label}</p>
+                <p className={`text-xs mt-0.5 ${isActive ? 'text-white/80' : 'text-slate-500'}`}>
+                  {s.semester}th Sem
+                </p>
+              </button>
+            );
+          })}
         </div>
       </Card>
 
-      {/* If no config → show CTA */}
+      {/* Section picker */}
+      <Card>
+        <label className="block md:w-64">
+          <span className="label">Section</span>
+          <select className="input" value={section} onChange={(e) => setSection(e.target.value)}>
+            {SECTIONS.map((s) => <option key={s} value={s}>Section {s}</option>)}
+          </select>
+        </label>
+      </Card>
+
       {!config && (
         <Card>
           <div className="text-center py-10">
             <p className="text-slate-600 mb-4">
-              No layout configured yet for <b>Year {year} · Section {section}</b>.
+              No timetable layout configured yet for{' '}
+              <b>{activeKey?.label} · Section {section}</b>.
             </p>
             <Button onClick={openSetup}>
               <Settings size={16} /> Configure Timetable Layout
@@ -290,37 +386,70 @@ export default function AdminTimetable() {
         </Card>
       )}
 
-      {/* Grid (only when config exists) */}
       {config && (
         <Card>
           {loading ? (
             <p className="text-sm text-slate-500 py-6 text-center">Loading…</p>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-full border-collapse text-sm">
+              <table className="min-w-[1100px] border-collapse text-xs">
                 <thead>
                   <tr>
-                    <th className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700 w-32">
+                    <th className="border border-slate-200 bg-slate-50 px-2 py-1 text-left font-semibold text-slate-700 w-24">
                       Day
                     </th>
-                    {config.periods.map((p) => (
-                      <th
-                        key={p.startTime}
-                        className="border border-slate-200 bg-slate-50 px-3 py-2 text-left font-semibold text-slate-700 min-w-[160px]"
-                      >
-                        {p.startTime}–{p.endTime}
-                      </th>
-                    ))}
+                    {config.periods.map((p) => {
+                      const kind = p.kind || 'CLASS';
+                      const isBreak = kind === 'BREAK';
+                      const isLunch = kind === 'LUNCH';
+                      return (
+                        <th
+                          key={p.startTime}
+                          className={`border border-slate-200 px-2 py-1 text-left font-semibold whitespace-nowrap ${
+                            isLunch ? 'bg-orange-50 text-orange-700'
+                              : isBreak ? 'bg-slate-100 text-slate-600'
+                              : 'bg-slate-50 text-slate-700'
+                          }`}
+                        >
+                          <div>{to12h(p.startTime)}–{to12h(p.endTime)}</div>
+                          {(isBreak || isLunch) && (
+                            <div className="text-[10px] font-normal mt-0.5">
+                              {isLunch ? 'Lunch' : 'Break'}
+                            </div>
+                          )}
+                        </th>
+                      );
+                    })}
                   </tr>
                 </thead>
                 <tbody>
                   {config.days.map((dayKey) => (
                     <tr key={dayKey}>
-                      <td className="border border-slate-200 px-3 py-2 bg-slate-50 font-medium text-slate-700">
+                      <td className="border border-slate-200 px-2 py-1 bg-slate-50 font-medium text-slate-700 whitespace-nowrap">
                         {dayLabel(dayKey)}
                       </td>
                       {config.periods.map((p) => {
+                        const kind = p.kind || 'CLASS';
                         const slot = findSlot(dayKey, p.startTime);
+
+                        if (kind === 'BREAK' || kind === 'LUNCH') {
+                          const isLunch = kind === 'LUNCH';
+                          return (
+                            <td
+                              key={p.startTime}
+                              className={`border border-slate-200 p-1 align-middle text-center ${
+                                isLunch ? 'bg-orange-50' : 'bg-slate-50'
+                              }`}
+                            >
+                              <div className={`text-[10px] font-medium ${
+                                isLunch ? 'text-orange-700' : 'text-slate-500'
+                              }`}>
+                                {isLunch ? 'Lunch' : 'Break'}
+                              </div>
+                            </td>
+                          );
+                        }
+
                         return (
                           <td
                             key={p.startTime}
@@ -328,20 +457,16 @@ export default function AdminTimetable() {
                             onClick={() => openCell(dayKey, p)}
                           >
                             {slot ? (
-                              <div className="p-2">
-                                <p className="font-semibold text-brand-700 text-xs">
+                              <div className="px-1 py-0.5 leading-tight">
+                                <p className="font-semibold text-brand-700 text-[11px] truncate">
                                   {slot.subjectId?.subjectCode}
                                 </p>
-                                <p className="text-xs text-slate-600 truncate">
-                                  {slot.subjectId?.subjectName}
+                                <p className="text-[10px] text-slate-500 truncate">
+                                  {slot.facultyId?.name || '—'}
                                 </p>
-                                <p className="text-xs text-slate-500 mt-1">
-                                  {slot.facultyId?.name || 'Faculty'}
-                                </p>
-                                <p className="text-xs text-slate-400">Room {slot.room}</p>
                               </div>
                             ) : (
-                              <div className="p-2 text-xs text-slate-300 text-center">+ add</div>
+                              <div className="py-1 text-[10px] text-slate-300 text-center">+</div>
                             )}
                           </td>
                         );
@@ -355,30 +480,20 @@ export default function AdminTimetable() {
         </Card>
       )}
 
-      {/* ---- Setup modal ---- */}
-      <Modal
-        open={showSetup}
-        onClose={() => setShowSetup(false)}
-        title={`Layout for Year ${year} · Section ${section}`}
-      >
+      {/* Configure layout modal */}
+      <Modal open={showSetup} onClose={() => setShowSetup(false)}
+        title={`Layout for ${activeKey?.label} · Section ${section}`}>
         <div className="space-y-4">
-          {/* Days */}
           <div>
             <p className="label">Days (rows)</p>
             <div className="flex flex-wrap gap-2">
               {ALL_DAYS.map((d) => {
                 const selected = draftDays.includes(d.key);
                 return (
-                  <button
-                    key={d.key}
-                    type="button"
-                    onClick={() => toggleDraftDay(d.key)}
+                  <button key={d.key} type="button" onClick={() => toggleDraftDay(d.key)}
                     className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${
-                      selected
-                        ? 'bg-brand-600 text-white border-brand-600'
-                        : 'bg-white text-slate-600 border-slate-300 hover:border-brand-400'
-                    }`}
-                  >
+                      selected ? 'bg-brand-600 text-white border-brand-600'
+                        : 'bg-white text-slate-600 border-slate-300 hover:border-brand-400'}`}>
                     {d.label}
                   </button>
                 );
@@ -386,43 +501,72 @@ export default function AdminTimetable() {
             </div>
           </div>
 
-          {/* Periods */}
           <div>
-            <p className="label">Time periods (columns)</p>
-            <div className="space-y-2 max-h-48 overflow-y-auto border border-slate-200 rounded-lg p-2">
-              {draftPeriods.length === 0 && (
-                <p className="text-xs text-slate-400 text-center py-3">
-                  No periods yet — add one below.
-                </p>
-              )}
-              {draftPeriods.map((p) => (
-                <div key={p.startTime} className="flex items-center justify-between bg-slate-50 rounded px-3 py-1.5 text-sm">
-                  <span>{p.startTime}–{p.endTime}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeDraftPeriod(p.startTime)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <X size={14} />
+            <div className="flex items-center justify-between mb-1">
+              <p className="label mb-0">Time periods (columns)</p>
+              <div className="flex gap-2 text-xs">
+                <button type="button" onClick={addPresetPeriods} className="text-brand-600 hover:underline">
+                  load defaults
+                </button>
+                {draftPeriods.length > 0 && (
+                  <button type="button" onClick={clearDraftPeriods} className="text-red-500 hover:underline">
+                    clear
                   </button>
-                </div>
-              ))}
+                )}
+              </div>
             </div>
 
-            {/* Add period inline */}
-            <div className="grid grid-cols-3 gap-2 mt-2">
-              <Input
-                label="Start"
-                placeholder="09:00"
-                value={newPeriod.startTime}
+            <div className="space-y-2 max-h-56 overflow-y-auto border border-slate-200 rounded-lg p-2">
+              {draftPeriods.length === 0 && (
+                <p className="text-xs text-slate-400 text-center py-3">No periods yet — add one below.</p>
+              )}
+              {draftPeriods.map((p) => {
+                const isBreak = p.kind === 'BREAK';
+                const isLunch = p.kind === 'LUNCH';
+                return (
+                  <div
+                    key={p.startTime}
+                    className={`flex items-center gap-2 rounded px-3 py-1.5 text-sm ${
+                      isLunch ? 'bg-orange-50' : isBreak ? 'bg-slate-100' : 'bg-slate-50'
+                    }`}
+                  >
+                    <span className="flex-1">
+                      {to12h(p.startTime)} – {to12h(p.endTime)}
+                    </span>
+                    <select
+                      className="text-xs border border-slate-300 rounded px-1 py-0.5 bg-white"
+                      value={p.kind || 'CLASS'}
+                      onChange={(e) => changeDraftKind(p.startTime, e.target.value)}
+                    >
+                      <option value="CLASS">Class</option>
+                      <option value="BREAK">Break</option>
+                      <option value="LUNCH">Lunch</option>
+                    </select>
+                    <button type="button" onClick={() => removeDraftPeriod(p.startTime)}
+                      className="text-red-500 hover:text-red-700">
+                      <X size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 mt-2">
+              <Input label="Start" placeholder="09:00" value={newPeriod.startTime}
                 onChange={(e) => setNewPeriod({ ...newPeriod, startTime: e.target.value })}
-              />
-              <Input
-                label="End"
-                placeholder="10:00"
-                value={newPeriod.endTime}
+                onBlur={() => setNewPeriod({ ...newPeriod, startTime: normalizeTime(newPeriod.startTime) })} />
+              <Input label="End" placeholder="09:50" value={newPeriod.endTime}
                 onChange={(e) => setNewPeriod({ ...newPeriod, endTime: e.target.value })}
-              />
+                onBlur={() => setNewPeriod({ ...newPeriod, endTime: normalizeTime(newPeriod.endTime) })} />
+              <label className="block">
+                <span className="label">Kind</span>
+                <select className="input" value={newPeriod.kind}
+                  onChange={(e) => setNewPeriod({ ...newPeriod, kind: e.target.value })}>
+                  <option value="CLASS">Class</option>
+                  <option value="BREAK">Break</option>
+                  <option value="LUNCH">Lunch</option>
+                </select>
+              </label>
               <div className="flex items-end">
                 <Button type="button" variant="secondary" onClick={addDraftPeriod} className="w-full">
                   <Plus size={14} /> Add
@@ -438,18 +582,33 @@ export default function AdminTimetable() {
         </div>
       </Modal>
 
-      {/* ---- Cell editor modal ---- */}
-      <Modal
-        open={cellOpen}
-        onClose={() => setCellOpen(false)}
-        title={editingSlot ? 'Edit Slot' : 'Add Slot'}
-      >
+      {/* Reset confirm */}
+      <Modal open={showReset} onClose={() => setShowReset(false)} title="Reset timetable layout?">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-700">
+            This clears the day/time grid for <b>{activeKey?.label} · Section {section}</b>.
+            Existing slot data remains in the database.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setShowReset(false)} disabled={resetting}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={performReset} disabled={resetting}>
+              <RotateCcw size={14} /> {resetting ? 'Resetting…' : 'Reset'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Cell edit modal */}
+      <Modal open={cellOpen} onClose={() => setCellOpen(false)}
+        title={editingSlot ? 'Edit Slot' : 'Add Slot'}>
         {cellTarget && (
           <form onSubmit={saveCell} className="space-y-3">
             <div className="text-xs text-slate-500">
               <Badge variant="brand">{dayLabel(cellTarget.day)}</Badge>
-              &nbsp; {cellTarget.startTime}–{cellTarget.endTime} &nbsp;·&nbsp;
-              Year {year} · Section {section}
+              &nbsp; {to12h(cellTarget.startTime)} – {to12h(cellTarget.endTime)} &nbsp;·&nbsp;
+              {activeKey?.label} · Section {section}
             </div>
 
             <label className="block">
@@ -471,13 +630,10 @@ export default function AdminTimetable() {
                 onChange={(e) => setCellForm({ ...cellForm, facultyId: e.target.value })}>
                 <option value="">Select faculty</option>
                 {faculties.map((f) => (
-                  <option key={f._id} value={f._id}>{f.employeeId} — {f.name}</option>
+                  <option key={f._id} value={f._id}>{f.employeeId} — {f.name || '(pending)'}</option>
                 ))}
               </select>
             </label>
-
-            <Input label="Room" required value={cellForm.room}
-              onChange={(e) => setCellForm({ ...cellForm, room: e.target.value })} />
 
             <div className="flex justify-between gap-2 pt-2">
               {editingSlot ? (
@@ -486,9 +642,7 @@ export default function AdminTimetable() {
                 </Button>
               ) : <span />}
               <div className="flex gap-2">
-                <Button type="button" variant="secondary" onClick={() => setCellOpen(false)}>
-                  Cancel
-                </Button>
+                <Button type="button" variant="secondary" onClick={() => setCellOpen(false)}>Cancel</Button>
                 <Button type="submit" disabled={saving}>
                   {saving ? 'Saving…' : editingSlot ? 'Save Changes' : 'Add Slot'}
                 </Button>

@@ -11,16 +11,18 @@ const studentSchema = new mongoose.Schema({
   admissionYear: { type: Number },
   academicYear: { type: Number, required: true, min: 2, max: 4 },
   year: { type: Number, required: true, min: 2, max: 4 },
+  currentSemester: { type: Number, required: true, min: 1, max: 8 },
   semester: { type: Number, required: true, min: 1, max: 8 },
   section: { type: String, default: 'A' },
-  status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
-   contactBlocked: { type: Boolean, default: false },
+  status: { type: String, enum: ['ACTIVE', 'INACTIVE', 'GRADUATED'], default: 'ACTIVE' },
+
+  contactBlocked: { type: Boolean, default: false },
   contactBlockedAt: { type: Date, default: null },
-   contactBlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  contactBlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
 }, { timestamps: true });
 
-studentSchema.index({ year: 1, semester: 1, section: 1 });
+studentSchema.index({ year: 1, currentSemester: 1, section: 1 });
 studentSchema.index({ batch: 1, status: 1 });
 studentSchema.index({ contactBlocked: 1 });
 
-module.exports = mongoose.model('Student', studentSchema);
+module.exports = mongoose.models.Student || mongoose.model('Student', studentSchema);

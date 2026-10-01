@@ -14,7 +14,7 @@ const BATCH_MAP = {
 async function list({ q, year, semester, section, batch, status, page = 1, limit = 200 }) {
   const query = {};
   if (year) query.year = Number(year);
-  if (semester) query.semester = Number(semester);
+  if (semester) query.currentSemester = Number(semester);
   if (section) query.section = section;
   if (batch) query.batch = batch;
   if (status) query.status = status;
@@ -52,13 +52,16 @@ async function create(data, actor) {
   });
   if (dup) throw ApiError.conflict('Student with same roll number or email already exists');
 
+  const firstSem = 2 * year - 1;   // Year 2 → Sem 3, Year 3 → Sem 5, Year 4 → Sem 7
+
   const payload = {
     rollNumber: data.rollNumber.trim(),
     email: data.email.trim().toLowerCase(),
     name: '',
     academicYear: year,
     year,
-    semester: 2 * year - 1,
+    currentSemester: firstSem,
+    semester: firstSem,
     section: 'A',
     batch: meta.batch,
     admissionYear: meta.admissionYear,
@@ -69,7 +72,8 @@ async function create(data, actor) {
   const s = await Student.create(payload);
   await auditLog.log({
     actor, action: 'STUDENT_CREATE', entityType: 'Student', entityId: s._id,
-    description: `Created student ${s.rollNumber} (Year ${s.year})`, newValue: payload,
+    description: `Created student ${s.rollNumber} (Year ${s.year} Sem ${s.currentSemester})`,
+    newValue: payload,
   });
   return s;
 }
@@ -80,23 +84,41 @@ async function update(id, data, actor) {
 
   const patch = {};
 
-  // Email is editable by admin
   if (data.email !== undefined) {
     const email = String(data.email).trim().toLowerCase();
     if (email) {
       const dup = await Student.findOne({ email, _id: { $ne: id } });
       if (dup) throw ApiError.conflict('Another student already uses this email');
       patch.email = email;
-
-      // Also sync the linked user's email so login keeps working
       await User.updateOne({ studentId: id }, { $set: { email } });
     }
   }
 
-  // Name can be corrected if needed
   if (data.name !== undefined) patch.name = String(data.name).trim();
 
-  // Status
+  // When the year changes, auto-reset to first semester of the new year
+  if (data.year !== undefined) {
+    const y = Number(data.year);
+    const meta = BATCH_MAP[y];
+    if (meta) {
+      patch.year = y;
+      patch.academicYear = y;
+      patch.batch = meta.batch;
+      patch.admissionYear = meta.admissionYear;
+      if (old.year !== y) {
+        patch.currentSemester = 2 * y - 1;
+        patch.semester = 2 * y - 1;
+      }
+    }
+  }
+
+  // If the admin explicitly changes the semester
+  if (data.currentSemester !== undefined) {
+    const sem = Number(data.currentSemester);
+    patch.currentSemester = sem;
+    patch.semester = sem;
+  }
+
   if (data.status !== undefined) patch.status = data.status;
 
   const s = await Student.findByIdAndUpdate(id, patch, { new: true, runValidators: true });
@@ -124,7 +146,6 @@ async function remove(id, actor) {
   const s = await Student.findById(id);
   if (!s) throw ApiError.notFound('Student not found');
 
-  // Cascading cleanup: user account, marks, pending OTPs
   await Promise.all([
     User.deleteMany({ studentId: s._id }),
     Marks.deleteMany({ studentId: s._id }),
@@ -135,10 +156,9 @@ async function remove(id, actor) {
 
   await auditLog.log({
     actor, action: 'STUDENT_DELETE', entityType: 'Student', entityId: id,
-    description: `Deleted student ${s.rollNumber} (${s.name || 'no name'})`,
+    description: `Deleted student ${s.rollNumber}`,
     oldValue: s.toObject(),
   });
-
   return { ok: true };
 }
 

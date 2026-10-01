@@ -1,17 +1,24 @@
 const mongoose = require('mongoose');
 
 const timetableSchema = new mongoose.Schema({
-  subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true },
-  facultyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Faculty', required: true },
+  subjectId: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject' },
+  facultyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Faculty' },
+
   year: { type: Number, required: true, min: 2, max: 4 },
-  semesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'Semester'},
+  semester: { type: Number, required: true, min: 3, max: 8 },
+  semesterId: { type: mongoose.Schema.Types.ObjectId, ref: 'Semester' },
   section: { type: String, required: true },
-  room: { type: String, required: true },
+
+  room: { type: String, default: '' },
+
   day: { type: String, enum: ['MON','TUE','WED','THU','FRI','SAT'], required: true },
-  startTime: { type: String, required: true }, // "09:00"
+  startTime: { type: String, required: true },
   endTime: { type: String, required: true },
+
+  periodType: { type: String, enum: ['CLASS', 'BREAK', 'LUNCH'], default: 'CLASS' },
+  isBreak: { type: Boolean, default: false },
 }, { timestamps: true });
 
-timetableSchema.index({ year: 1, semesterId: 1, section: 1, day: 1 });
+timetableSchema.index({ year: 1, semester: 1, section: 1, day: 1, startTime: 1 });
 
-module.exports = mongoose.model('Timetable', timetableSchema);
+module.exports = mongoose.models.Timetable || mongoose.model('Timetable', timetableSchema);

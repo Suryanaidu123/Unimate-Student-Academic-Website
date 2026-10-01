@@ -9,6 +9,7 @@ router.use('/notes', require('./note.routes'));
 router.use('/assignments', require('./assignment.routes'));
 router.use('/timetable', require('./timetable.routes'));
 router.use('/exams', require('./exam.routes'));
+router.use('/admin/semesters', require('./semester.routes'));
 router.use('/notifications', require('./notification.routes'));
 router.use('/admin/bulk-students', require('./bulkStudent.routes'));
 router.use('/dashboard', require('./dashboard.routes'));

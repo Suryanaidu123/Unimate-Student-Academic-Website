@@ -27,22 +27,30 @@ async function getById(id) {
   if (!f) throw ApiError.notFound('Faculty not found');
   return f;
 }
+async function create(data, actor) {
+  const employeeId = String(data.employeeId || '').trim();
+  if (!employeeId) throw ApiError.badRequest('Employee ID is required');
 
-async function create(data, actor, initialPassword) {
-  const dup = await Faculty.findOne({
-    $or: [{ employeeId: data.employeeId }, { email: data.email }],
-  });
-  if (dup) throw ApiError.conflict('Faculty with same employee ID or email already exists');
+  const dup = await Faculty.findOne({ employeeId });
+  if (dup) throw ApiError.conflict('A faculty with this Employee ID already exists');
 
-  const f = await Faculty.create(data);
-  const passwordHash = await bcrypt.hash(initialPassword || 'Faculty@123', SALT_ROUNDS);
-  await User.create({
-    email: data.email, passwordHash, role: 'FACULTY', facultyId: f._id,
+  const f = await Faculty.create({
+    employeeId,
+    name: '',
+    email: '',
+    department: 'AI & ML',
+    designation: 'Assistant Professor',
+    status: 'INACTIVE',
   });
+
   await auditLog.log({
-    actor, action: 'FACULTY_CREATE', entityType: 'Faculty', entityId: f._id,
-    description: `Created faculty ${f.employeeId}`, newValue: data,
+    actor,
+    action: 'FACULTY_CREATE_STUB',
+    entityType: 'Faculty',
+    entityId: f._id,
+    description: `Created faculty stub ${f.employeeId}`,
   });
+
   return f;
 }
 

@@ -3,28 +3,32 @@ const path = require('path');
 const Material = require('../models/Material.model');
 const Subject = require('../models/Subject.model');
 const Student = require('../models/Student.model');
+const User = require('../models/User.model');
 const ApiError = require('../utils/ApiError');
 const auditLog = require('./auditLog.service');
 const notification = require('./notification.service');
 
-async function listForUser(user, { subjectId, year, q, page = 1, limit = 50 }) {
+async function listForUser(user, { subjectId, year, semester, unit, q, page = 1, limit = 100 }) {
   const query = { status: 'PUBLISHED' };
 
   if (user.role === 'STUDENT') {
     const student = await Student.findById(user.studentId);
     query.year = student.year;
-  } else if (year) {
-    query.year = Number(year);
+    query.semester = student.currentSemester;
+  } else {
+    if (year) query.year = Number(year);
+    if (semester) query.semester = Number(semester);
   }
 
   if (subjectId) query.subjectId = subjectId;
+  if (unit) query.unit = Number(unit);
   if (q) query.title = new RegExp(q, 'i');
 
   const [items, total] = await Promise.all([
     Material.find(query)
-     .populate('subjectId', 'subjectName subjectCode type')
+      .populate('subjectId', 'subjectName subjectCode type semester')
       .populate('uploadedBy', 'email role')
-      .sort({ createdAt: -1 })
+      .sort({ semester: 1, unit: 1, createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit),
     Material.countDocuments(query),
@@ -33,17 +37,25 @@ async function listForUser(user, { subjectId, year, q, page = 1, limit = 50 }) {
   return { items, total, page, limit };
 }
 
-async function create({ title, description, subjectId, file }, actor) {
+async function create({ title, description, subjectId, unit, file }, actor) {
   if (!file) throw ApiError.badRequest('PDF file is required');
+  if (!subjectId) throw ApiError.badRequest('Subject is required');
+
+  const u = Number(unit);
+  if (![1, 2, 3, 4, 5].includes(u)) {
+    throw ApiError.badRequest('Unit must be 1, 2, 3, 4 or 5');
+  }
 
   const subject = await Subject.findById(subjectId);
   if (!subject) throw ApiError.notFound('Subject not found');
 
   const material = await Material.create({
-    title,
-    description,
+    title: title || `Unit ${u}`,
+    description: description || '',
     subjectId,
     year: subject.year,
+    semester: subject.semester,
+    unit: u,
     fileUrl: `/uploads/materials/${file.filename}`,
     fileName: file.originalname,
     fileSize: file.size,
@@ -57,20 +69,27 @@ async function create({ title, description, subjectId, file }, actor) {
     action: 'MATERIAL_UPLOAD',
     entityType: 'Material',
     entityId: material._id,
-    description: `Uploaded PDF "${title}" for ${subject.subjectCode}`,
+    description: `Uploaded Unit ${u} PDF for ${subject.subjectCode}`,
   });
 
-  // Notify students of that year
-  const students = await Student.find({ year: subject.year }).select('_id');
-  const User = require('../models/User.model');
-  const users = await User.find({ role: 'STUDENT', studentId: { $in: students.map((s) => s._id) } }).select('_id');
-  for (const u of users) {
+  // Notify students in the same semester
+  const students = await Student.find({
+    year: subject.year,
+    currentSemester: subject.semester,
+    status: 'ACTIVE',
+  }).select('_id');
+  const users = await User.find({
+    role: 'STUDENT',
+    studentId: { $in: students.map((s) => s._id) },
+  }).select('_id');
+
+  for (const u2 of users) {
     await notification.fanOut({
-      title: 'New Academic Material',
-      message: `${title} — ${subject.subjectName}`,
+      title: `New material: ${subject.subjectCode} Unit ${u}`,
+      message: `${title || `Unit ${u}`} — ${subject.subjectName}`,
       type: 'NEW_NOTES_PUBLISHED',
       recipientType: 'USER',
-      filter: { userId: u._id },
+      filter: { userId: u2._id },
       createdBy: actor.userId,
       relatedEntity: 'Material',
       relatedEntityId: material._id,
@@ -84,12 +103,10 @@ async function remove(id, actor) {
   const m = await Material.findById(id);
   if (!m) throw ApiError.notFound('Material not found');
 
-  // Only the uploader or admin can delete
   if (actor.role !== 'ADMIN' && String(m.uploadedBy) !== String(actor.userId)) {
     throw ApiError.forbidden('You can only delete materials you uploaded');
   }
 
-  // Remove the file from disk (best-effort)
   const filePath = path.join(__dirname, '..', m.fileUrl);
   fs.unlink(filePath, () => {});
 
@@ -99,11 +116,13 @@ async function remove(id, actor) {
 }
 
 async function getByIdForUser(id, user) {
-  const m = await Material.findById(id).populate('subjectId', 'subjectName subjectCode year');
+  const m = await Material.findById(id).populate('subjectId', 'subjectName subjectCode year semester');
   if (!m) throw ApiError.notFound('Material not found');
   if (user.role === 'STUDENT') {
     const student = await Student.findById(user.studentId);
-    if (m.year !== student.year) throw ApiError.forbidden('Not your material');
+    if (m.year !== student.year || m.semester !== student.currentSemester) {
+      throw ApiError.forbidden('Not your material');
+    }
   }
   return m;
 }

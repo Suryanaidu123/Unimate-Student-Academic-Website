@@ -8,7 +8,11 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "seed:admin": "node scripts/seedAdmin.js",
-    "seed:rollseries": "node scripts/seedRollSeries.js"
+    "seed:rollseries": "node scripts/seedRollSeries.js",
+    "seed:semesters": "node scripts/seedSemesters.js",
+    "seed:sections": "node scripts/seedSections.js",
+    "fix:semesters": "node scripts/fixCurrentSemester.js",
+    "fix:subjects": "node scripts/fixSubjectSemesters.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

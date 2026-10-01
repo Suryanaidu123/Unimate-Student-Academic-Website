@@ -14,6 +14,7 @@ exports.upload = async (req, res, next) => {
       title: req.body.title,
       description: req.body.description || '',
       subjectId: req.body.subjectId,
+      unit: req.body.unit,
       file: req.file,
     }, req.user);
     return success(res, data, 'Material uploaded', 201);
@@ -25,14 +26,10 @@ exports.remove = async (req, res, next) => {
   catch (e) { next(e); }
 };
 
-// Download / view — re-verify authorization then stream the file
 exports.download = async (req, res, next) => {
   try {
     const m = await service.getByIdForUser(req.params.id, req.user);
-    const path = require('path');
-    const fs = require('fs');
     const filePath = path.join(__dirname, '..', m.fileUrl);
-
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ success: false, message: 'File missing on server' });
     }

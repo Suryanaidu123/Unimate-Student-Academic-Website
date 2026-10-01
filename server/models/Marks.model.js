@@ -26,4 +26,4 @@ const marksSchema = new mongoose.Schema({
 marksSchema.index({ studentId: 1, subjectId: 1 }, { unique: true });
 marksSchema.index({ status: 1 });
 
-module.exports = mongoose.model('Marks', marksSchema);
+module.exports = mongoose.models.Marks || mongoose.model('Marks', marksSchema);

@@ -32,13 +32,44 @@ export default function StudentLogin() {
     <AuthLayout
       title="Student Login"
       subtitle="Sign in to your AI & ML student account."
-      footer={<>New here? <Link className="text-brand-600 font-medium" to="/auth/student/register">Create account</Link></>}
+      footer={
+        <>
+          New here?{' '}
+          <Link className="text-brand-600 font-medium" to="/auth/student/register">
+            Create account
+          </Link>
+        </>
+      }
     >
       <form onSubmit={onSubmit} className="space-y-4">
-        <Input label="Email" type="email" required value={form.email}
-               onChange={(e) => setForm({ ...form, email: e.target.value })} />
-        <Input label="Password" type="password" required value={form.password}
-               onChange={(e) => setForm({ ...form, password: e.target.value })} />
+        <Input
+          label="Email"
+          type="email"
+          required
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
+
+        {/* Password label + Forgot Password on the same row */}
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <label className="block text-sm font-medium text-slate-700">Password</label>
+            <Link
+              to="/auth/student/forgot-password"
+              className="text-xs text-brand-600 hover:underline"
+            >
+              Forgot Password?
+            </Link>
+          </div>
+          <input
+            type="password"
+            required
+            className="input"
+            value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })}
+          />
+        </div>
+
         <Button type="submit" disabled={loading} className="w-full">
           {loading ? 'Signing in…' : 'Sign in'}
         </Button>
