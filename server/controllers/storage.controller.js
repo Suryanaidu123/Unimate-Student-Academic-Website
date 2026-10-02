@@ -1,19 +1,25 @@
 const { success } = require('../utils/apiResponse');
 const mongoose = require('mongoose');
 
-const CAPACITY_BYTES = 512 * 1024 * 1024; // 512 MB Atlas M0 free tier
+// MongoDB Atlas free tier (M0) has a 512 MB storage limit
+const CAPACITY_BYTES = 512 * 1024 * 1024;
 
 exports.stats = async (_req, res, next) => {
   try {
     const db = mongoose.connection.db;
-    let totalBytes = 0;
 
-    // Try Atlas-native command first
+    // Use the Atlas-specific command — this is the accurate source of truth
+    // for M0/Flex clusters. It returns dataSize + indexSize combined.
+    let totalBytes = 0;
+    let raw = null;
+
     try {
-      const result = await db.command({ atlasSize: 1 });
-      totalBytes = result.atlasSize || 0;
-    } catch {
-      // Fallback: sum db.stats() dataSize + indexSize
+      raw = await db.command({ atlasSize: 1 });
+      // atlasSize = total data + index size across all databases
+      totalBytes = Number(raw.atlasSize || 0);
+    } catch (err) {
+      // Fallback for non-Atlas or older setups
+      console.warn('atlasSize command failed, falling back to db.stats():', err.message);
       const stats = await db.stats();
       totalBytes = (stats.dataSize || 0) + (stats.indexSize || 0);
     }
@@ -24,9 +30,17 @@ exports.stats = async (_req, res, next) => {
 
     return success(res, {
       capacityMB: 512,
-      usedMB: Math.round(usedBytes / (1024 * 1024) * 100) / 100,
-      remainingMB: Math.round(remainingBytes / (1024 * 1024) * 100) / 100,
+      usedMB: Math.round((usedBytes / (1024 * 1024)) * 100) / 100,
+      remainingMB: Math.round((remainingBytes / (1024 * 1024)) * 100) / 100,
       usagePercent,
+      // Extra detail so you can see what's happening
+      dataSizeBytes: raw?.totals?.dataSize || null,
+      indexSizeBytes: raw?.totals?.indexSize || null,
+      storageSizeBytes: raw?.totals?.storageSize || null,
+      collections: raw?.totals?.collections || null,
+      objects: raw?.totals?.objects || null,
     });
-  } catch (e) { next(e); }
+  } catch (e) {
+    next(e);
+  }
 };
