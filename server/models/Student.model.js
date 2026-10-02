@@ -19,6 +19,16 @@ const studentSchema = new mongoose.Schema({
   contactBlocked: { type: Boolean, default: false },
   contactBlockedAt: { type: Date, default: null },
   contactBlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+
+  // NEW: timestamps for when each section was last viewed
+  sectionReadAt: {
+    exams: { type: Date, default: null },
+    materials: { type: Date, default: null },
+    assignments: { type: Date, default: null },
+    timetable: { type: Date, default: null },
+    marks: { type: Date, default: null },
+    notifications: { type: Date, default: null },
+  },
 }, { timestamps: true });
 
 studentSchema.index({ year: 1, currentSemester: 1, section: 1 });

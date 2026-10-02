@@ -1,443 +1,307 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Trash2 } from 'lucide-react';
+import { Save, AlertCircle } from 'lucide-react';
 import api from '../../services/api.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
-import Input from '../../components/ui/Input.jsx';
 import Table from '../../components/ui/Table.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 
-const YEARS = [2, 3, 4];
+const YEAR_SEMESTERS = { 2: [3, 4], 3: [5, 6], 4: [7, 8] };
 const SECTIONS = ['A', 'B', 'C', 'D'];
 
-// Ascending sort by roll number, numeric-aware (handles A6101 < A6102 < A6164)
-const sortByRoll = (a, b) =>
-  String(a?.rollNumber || '').localeCompare(
-    String(b?.rollNumber || ''),
-    undefined,
-    { numeric: true }
-  );
+function computeMid(written, online, assignment) {
+  const w = Number(written || 0), o = Number(online || 0), a = Number(assignment || 0);
+  return { writtenConverted: w / 2, total: w / 2 + o + a };
+}
+function computeInternal(m1, m2) { return Math.max(m1 || 0, m2 || 0); }
 
 export default function FacultyMarks() {
-  // ---- Cascading selection ----
   const [year, setYear] = useState('');
-  const [type, setType] = useState('THEORY');
+  const [semester, setSemester] = useState('');
   const [section, setSection] = useState('');
   const [subjectId, setSubjectId] = useState('');
-  const [studentId, setStudentId] = useState('');
+  const [examType, setExamType] = useState('MID1');
 
-  // ---- Lookup lists ----
-  const [students, setStudents] = useState([]);
   const [subjects, setSubjects] = useState([]);
-  const [loadingLookups, setLoadingLookups] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [marksMap, setMarksMap] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [records, setRecords] = useState([]);
 
-  // ---- Marks form ----
-  const [form, setForm] = useState({ m1w: 0, m1o: 0, m1a: 0, m2w: 0, m2o: 0, m2a: 0 });
-  const [submitting, setSubmitting] = useState(false);
-
-  // ---- Existing records ----
-  const [marks, setMarks] = useState([]);
-
-  // -------------------------------------------------------------
-  // Load students when Year + Section are set — ascending by roll
-  // -------------------------------------------------------------
   useEffect(() => {
-    if (!year || !section) {
-      setStudents([]);
-      setStudentId('');
-      return;
-    }
-    setLoadingLookups(true);
-    api.get(`/lookup/students?year=${year}&section=${section}`)
-      .then((r) => {
-        const list = [...(r.data.data || [])].sort(sortByRoll);
+    setSemester(''); setSection(''); setSubjectId(''); setStudents([]); setMarksMap({});
+  }, [year]);
+  useEffect(() => {
+    setSection(''); setSubjectId(''); setStudents([]); setMarksMap({});
+  }, [semester]);
+
+  // Load subjects — backend already restricts to this faculty's assignments
+  useEffect(() => {
+    if (!year || !semester) { setSubjects([]); return; }
+    api.get(`/subjects?year=${year}&semester=${semester}&limit=200`)
+      .then((r) => setSubjects(r.data.data.items || []))
+      .catch(() => {});
+  }, [year, semester]);
+
+  useEffect(() => {
+    if (!subjectId || !section) { setStudents([]); setMarksMap({}); return; }
+    setLoading(true);
+    Promise.all([
+      api.get(`/lookup/students?year=${year}&section=${section}`),
+      api.get(`/marks?subjectId=${subjectId}&section=${section}`),
+    ])
+      .then(([sRes, mRes]) => {
+        const list = [...(sRes.data.data || [])];
+        list.sort((a, b) => String(a.rollNumber).localeCompare(String(b.rollNumber), undefined, { numeric: true }));
         setStudents(list);
-      })
-      .catch(() => toast.error('Failed to load students'))
-      .finally(() => setLoadingLookups(false));
-  }, [year, section]);
 
-  // -------------------------------------------------------------
-  // Load subjects when Year (+ Type) is set — theory-first order
-  // -------------------------------------------------------------
-  useEffect(() => {
-    if (!year) {
-      setSubjects([]);
-      setSubjectId('');
-      return;
-    }
-    const params = new URLSearchParams({ year });
-    if (type) params.set('type', type);
-
-    api.get(`/lookup/subjects?${params.toString()}`)
-      .then((r) => {
-        const list = [...(r.data.data || [])];
-        // Safety sort: THEORY first, then LAB, then alphabetical
-        list.sort((a, b) => {
-          const rank = (s) => (s.type === 'LAB' ? 1 : 0);
-          if (rank(a) !== rank(b)) return rank(a) - rank(b);
-          return String(a.subjectCode).localeCompare(String(b.subjectCode));
+        const map = {};
+        list.forEach((s) => {
+          const existing = (mRes.data.data?.items || []).find(
+            (m) => String(m.studentId?._id || m.studentId) === String(s._id)
+          );
+          map[s._id] = {
+            mid1: existing?.mid1 || { written: 0, online: 0, assignment: 0, total: 0 },
+            mid2: existing?.mid2 || { written: 0, online: 0, assignment: 0, total: 0 },
+            status: existing?.status || 'DRAFT',
+            _id: existing?._id,
+          };
         });
-        setSubjects(list);
-        // Clear stale subject if it's not in the new list
-        if (subjectId && !list.some((s) => s._id === subjectId)) {
-          setSubjectId('');
-        }
+        setMarksMap(map);
       })
-      .catch(() => toast.error('Failed to load subjects'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [year, type]);
+      .catch(() => toast.error('Failed to load data'))
+      .finally(() => setLoading(false));
+  }, [subjectId, section, year]);
 
-  // -------------------------------------------------------------
-  // Load existing marks for the selected subject — sorted by roll
-  // -------------------------------------------------------------
-  function loadMarks() {
-    const params = new URLSearchParams();
-    if (subjectId) params.set('subjectId', subjectId);
+  function loadRecords() {
+    if (!subjectId) { setRecords([]); return; }
+    const params = new URLSearchParams({ subjectId });
+    if (section) params.set('section', section);
     api.get(`/marks?${params.toString()}`)
-      .then((r) => {
-        const list = [...(r.data.data.items || [])];
-        list.sort((a, b) => sortByRoll(a.studentId, b.studentId));
-        setMarks(list);
-      })
+      .then((r) => setRecords(r.data.data.items || []))
       .catch(() => {});
   }
-  useEffect(loadMarks, [subjectId]);
+  useEffect(loadRecords, [subjectId, section]);
 
-  // -------------------------------------------------------------
-  // Save marks
-  // -------------------------------------------------------------
-  async function onSubmit(e) {
-    e.preventDefault();
-    if (!subjectId || !studentId) {
-      return toast.error('Select subject and student first');
-    }
-    setSubmitting(true);
-    try {
-      await api.post('/marks', {
-        studentId,
-        subjectId,
-        mid1: {
-          written: Number(form.m1w),
-          online: Number(form.m1o),
-          assignment: Number(form.m1a),
-        },
-        mid2: {
-          written: Number(form.m2w),
-          online: Number(form.m2o),
-          assignment: Number(form.m2a),
-        },
-      });
-      toast.success('Marks saved');
-      setForm({ m1w: 0, m1o: 0, m1a: 0, m2w: 0, m2o: 0, m2a: 0 });
-      loadMarks();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to save marks');
-    } finally {
-      setSubmitting(false);
-    }
+  function updateCell(studentId, midKey, field, value) {
+    setMarksMap((prev) => {
+      const current = prev[studentId] || {
+        mid1: { written: 0, online: 0, assignment: 0, total: 0 },
+        mid2: { written: 0, online: 0, assignment: 0, total: 0 },
+        status: 'DRAFT',
+      };
+      const mid = { ...current[midKey], [field]: Number(value || 0) };
+      const computed = computeMid(mid.written, mid.online, mid.assignment);
+      mid.writtenConverted = computed.writtenConverted;
+      mid.total = computed.total;
+      return { ...prev, [studentId]: { ...current, [midKey]: mid } };
+    });
   }
 
-  // -------------------------------------------------------------
-  // Publish a draft
-  // -------------------------------------------------------------
-  async function publish(id) {
+  async function saveAll() {
+    if (!subjectId) return toast.error('Select a subject first');
+    if (students.length === 0) return toast.error('No students to save');
+
+    const rows = students.map((s) => ({
+      studentId: s._id,
+      mid1: marksMap[s._id]?.mid1,
+      mid2: marksMap[s._id]?.mid2,
+    }));
+
+    setSaving(true);
     try {
-      await api.post(`/marks/${id}/publish`);
-      toast.success('Published');
-      loadMarks();
+      const r = await api.post('/marks/bulk', { subjectId, rows });
+      const { saved, errors } = r.data.data;
+      if (errors.length > 0) toast.error(`Saved ${saved}. ${errors.length} failed.`);
+      else toast.success(`Saved ${saved} record(s) successfully.`);
+      loadRecords();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to publish');
-    }
+      toast.error(err.response?.data?.message || 'Failed to save');
+    } finally { setSaving(false); }
   }
 
-  // -------------------------------------------------------------
-  // Delete marks (blocked if LOCKED)
-  // -------------------------------------------------------------
-  async function removeMarks(id, status) {
-    if (status === 'LOCKED') {
-      return toast.error('Locked marks cannot be deleted. Contact admin.');
-    }
-    if (!window.confirm('Delete these marks? This cannot be undone.')) return;
-    try {
-      await api.delete(`/marks/${id}`);
-      toast.success('Marks deleted');
-      loadMarks();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to delete');
-    }
+  async function publishOne(id) {
+    try { await api.post(`/marks/${id}/publish`); toast.success('Published'); loadRecords(); }
+    catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
   }
 
-  const isLab = type === 'LAB';
-  const selectedSubject = subjects.find((s) => s._id === subjectId);
-  const selectedStudent = students.find((s) => s._id === studentId);
+  const noSubjectsAssigned = year && semester && subjects.length === 0;
 
   return (
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Enter Internal Marks</h1>
         <p className="text-sm text-slate-500">
-          You can only enter marks for subjects you're assigned to.
+          Only subjects assigned to you appear here. Enter marks for the entire class in one table.
         </p>
       </div>
 
-      {/* ---------- STEP 1: Cascade selectors ---------- */}
-      <Card title="1. Select Student & Subject">
-        <div className="grid md:grid-cols-5 gap-3">
+      <Card title="1. Select Class">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <label className="block">
             <span className="label">Year</span>
-            <select
-              className="input"
-              value={year}
-              onChange={(e) => setYear(e.target.value)}
-            >
+            <select className="input" value={year} onChange={(e) => setYear(e.target.value)}>
               <option value="">Select</option>
-              {YEARS.map((y) => (
-                <option key={y} value={y}>{y} Year</option>
+              {[2, 3, 4].map((y) => <option key={y} value={y}>{y} Year</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="label">Semester</span>
+            <select className="input" value={semester} onChange={(e) => setSemester(e.target.value)} disabled={!year}>
+              <option value="">Select</option>
+              {year && YEAR_SEMESTERS[Number(year)]?.map((s) => (
+                <option key={s} value={s}>Semester {s}</option>
               ))}
             </select>
           </label>
-
-          <label className="block">
-            <span className="label">Type</span>
-            <select
-              className="input"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-            >
-              <option value="THEORY">Theory</option>
-              <option value="LAB">Lab</option>
-            </select>
-          </label>
-
           <label className="block">
             <span className="label">Section</span>
-            <select
-              className="input"
-              value={section}
-              onChange={(e) => setSection(e.target.value)}
-            >
+            <select className="input" value={section} onChange={(e) => setSection(e.target.value)} disabled={!semester}>
               <option value="">Select</option>
-              {SECTIONS.map((s) => (
-                <option key={s} value={s}>Section {s}</option>
-              ))}
+              {SECTIONS.map((s) => <option key={s} value={s}>Section {s}</option>)}
             </select>
           </label>
-
           <label className="block">
             <span className="label">Subject</span>
-            <select
-              className="input"
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value)}
-              disabled={!year}
-            >
-              <option value="">
-                {!year
-                  ? 'Pick year first'
-                  : subjects.length === 0
-                  ? `No ${type.toLowerCase()} subjects`
-                  : 'Select subject'}
-              </option>
+            <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)} disabled={!semester}>
+              <option value="">Select</option>
               {subjects.map((s) => (
                 <option key={s._id} value={s._id}>
-                  [{s.type || 'THEORY'}] {s.subjectCode} — {s.subjectName}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="label">Student (roll no)</span>
-            <select
-              className="input"
-              value={studentId}
-              onChange={(e) => setStudentId(e.target.value)}
-              disabled={!year || !section || loadingLookups}
-            >
-              <option value="">
-                {loadingLookups
-                  ? 'Loading…'
-                  : !year || !section
-                  ? 'Pick year & section'
-                  : students.length === 0
-                  ? 'No students'
-                  : 'Select student'}
-              </option>
-              {students.map((s) => (
-                <option key={s._id} value={s._id}>
-                  {s.rollNumber} — {s.name}
+                  [{s.type}] {s.subjectCode} — {s.subjectName}
                 </option>
               ))}
             </select>
           </label>
         </div>
 
-        {/* Helpful hints */}
-        {year && type && subjects.length === 0 && (
-          <p className="text-xs text-amber-600 mt-3">
-            You aren't assigned to any <b>{type.toLowerCase()}</b> subjects for Year {year}.
-            Ask admin to assign you.
-          </p>
-        )}
-        {year && section && students.length === 0 && !loadingLookups && (
-          <p className="text-xs text-amber-600 mt-3">
-            No students found for Year {year}, Section {section}.
-            Add them in Admin → Students first.
-          </p>
-        )}
-        {selectedSubject && selectedStudent && (
-          <p className="text-xs text-brand-700 mt-3">
-            Entering marks for <b>{selectedStudent.rollNumber}</b> ({selectedStudent.name})
-            in <b>{selectedSubject.subjectCode}</b> — {selectedSubject.subjectName}
-          </p>
-        )}
-      </Card>
-
-      {/* ---------- STEP 2: Marks entry ---------- */}
-      <Card title={`2. Enter ${isLab ? 'Lab' : 'Theory'} Marks`}>
-        <form onSubmit={onSubmit} className="grid md:grid-cols-3 gap-3">
-          <Input
-            type="number" min={0} max={30}
-            label={isLab ? 'Mid-1 Record (0–30)' : 'Mid-1 Written (0–30)'}
-            value={form.m1w}
-            onChange={(e) => setForm({ ...form, m1w: e.target.value })}
-          />
-          <Input
-            type="number" min={0} max={10}
-            label={isLab ? 'Mid-1 Viva (0–10)' : 'Mid-1 Online (0–10)'}
-            value={form.m1o}
-            onChange={(e) => setForm({ ...form, m1o: e.target.value })}
-          />
-          <Input
-            type="number" min={0} max={5}
-            label={isLab ? 'Mid-1 Observation (0–5)' : 'Mid-1 Assignment (0–5)'}
-            value={form.m1a}
-            onChange={(e) => setForm({ ...form, m1a: e.target.value })}
-          />
-
-          <Input
-            type="number" min={0} max={30}
-            label={isLab ? 'Mid-2 Record (0–30)' : 'Mid-2 Written (0–30)'}
-            value={form.m2w}
-            onChange={(e) => setForm({ ...form, m2w: e.target.value })}
-          />
-          <Input
-            type="number" min={0} max={10}
-            label={isLab ? 'Mid-2 Viva (0–10)' : 'Mid-2 Online (0–10)'}
-            value={form.m2o}
-            onChange={(e) => setForm({ ...form, m2o: e.target.value })}
-          />
-          <Input
-            type="number" min={0} max={5}
-            label={isLab ? 'Mid-2 Observation (0–5)' : 'Mid-2 Assignment (0–5)'}
-            value={form.m2a}
-            onChange={(e) => setForm({ ...form, m2a: e.target.value })}
-          />
-
-          <div className="md:col-span-3">
-            <Button
-              type="submit"
-              disabled={submitting || !studentId || !subjectId}
-            >
-              {submitting ? 'Saving…' : 'Save Marks'}
-            </Button>
+        {noSubjectsAssigned && (
+          <div className="mt-3 flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <AlertCircle size={14} className="mt-0.5 shrink-0" />
+            <p>
+              You are not assigned to any subject in {year === '2' ? '2nd' : year === '3' ? '3rd' : '4th'} Year · Semester {semester}.
+              Marks entry is not available for subjects you don't teach.
+            </p>
           </div>
-        </form>
-        <p className="text-xs text-slate-500 mt-2">
-          Internal = max(Mid-1 total, Mid-2 total), where each total = (written ÷ 2) + online + assignment.
-          Calculation is identical for Theory and Lab.
-        </p>
+        )}
       </Card>
 
-      {/* ---------- STEP 3: Existing records ---------- */}
-      <Card title={`Marks Records${subjectId ? '' : ' — pick a subject to filter'}`}>
-        <Table
-          empty="No marks records."
-          columns={[
-            {
-              key: 'student', label: 'Roll No',
-              render: (r) => (
-                <span className="font-mono text-xs">
-                  {r.studentId?.rollNumber || '—'}
+      {subjectId && section && students.length > 0 && (
+        <Card>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-slate-700">Entering:</span>
+            <div className="inline-flex rounded-lg border border-slate-300 overflow-hidden">
+              <button onClick={() => setExamType('MID1')}
+                className={`px-4 py-1.5 text-sm font-medium transition ${
+                  examType === 'MID1' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>
+                Mid-1
+              </button>
+              <button onClick={() => setExamType('MID2')}
+                className={`px-4 py-1.5 text-sm font-medium transition border-l border-slate-300 ${
+                  examType === 'MID2' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'}`}>
+                Mid-2
+              </button>
+            </div>
+            <span className="text-xs text-slate-500">{students.length} student{students.length === 1 ? '' : 's'}</span>
+          </div>
+        </Card>
+      )}
+
+      {subjectId && section && (
+        <Card title={`2. Bulk Entry — ${students.length} student${students.length === 1 ? '' : 's'}`}>
+          {loading ? (
+            <p className="text-sm text-slate-500 py-6 text-center">Loading students…</p>
+          ) : students.length === 0 ? (
+            <p className="text-sm text-slate-500 py-6 text-center">No students found for this year + section.</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-[720px] w-full text-sm">
+                  <thead className="sticky top-0 bg-white z-10">
+                    <tr className="text-left text-slate-500 border-b border-slate-200">
+                      <th className="py-2 pr-3 w-8">#</th>
+                      <th className="py-2 pr-3">Roll No</th>
+                      <th className="py-2 pr-3">Name</th>
+                      <th className="py-2 pr-3 w-24">Written<br /><span className="text-xs font-normal">(0–30)</span></th>
+                      <th className="py-2 pr-3 w-24">Online<br /><span className="text-xs font-normal">(0–10)</span></th>
+                      <th className="py-2 pr-3 w-24">Assignment<br /><span className="text-xs font-normal">(0–5)</span></th>
+                      <th className="py-2 pr-3 w-20">Total</th>
+                      <th className="py-2 pr-3 w-20">Internal</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((student, idx) => {
+                      const m = marksMap[student._id] || {};
+                      const midKey = examType === 'MID1' ? 'mid1' : 'mid2';
+                      const otherKey = examType === 'MID1' ? 'mid2' : 'mid1';
+                      const mid = m[midKey] || { written: 0, online: 0, assignment: 0, total: 0 };
+                      const other = m[otherKey] || { total: 0 };
+                      const internal = computeInternal(mid.total, other.total);
+                      return (
+                        <tr key={student._id} className="border-b border-slate-100">
+                          <td className="py-2 pr-3 text-slate-400 text-xs">{idx + 1}</td>
+                          <td className="py-2 pr-3 font-mono text-xs">{student.rollNumber}</td>
+                          <td className="py-2 pr-3 text-xs">{student.name || '—'}</td>
+                          <td className="py-2 pr-3">
+                            <input type="number" min="0" max="30" value={mid.written ?? 0}
+                              onChange={(e) => updateCell(student._id, midKey, 'written', e.target.value)}
+                              className="input !py-1 !px-2 !text-sm w-20" />
+                          </td>
+                          <td className="py-2 pr-3">
+                            <input type="number" min="0" max="10" value={mid.online ?? 0}
+                              onChange={(e) => updateCell(student._id, midKey, 'online', e.target.value)}
+                              className="input !py-1 !px-2 !text-sm w-20" />
+                          </td>
+                          <td className="py-2 pr-3">
+                            <input type="number" min="0" max="5" value={mid.assignment ?? 0}
+                              onChange={(e) => updateCell(student._id, midKey, 'assignment', e.target.value)}
+                              className="input !py-1 !px-2 !text-sm w-20" />
+                          </td>
+                          <td className="py-2 pr-3 text-xs font-medium text-slate-700">
+                            {mid.total?.toFixed(1) || '0.0'}/30
+                          </td>
+                          <td className="py-2 pr-3 text-xs font-semibold text-brand-700">
+                            {internal?.toFixed(1) || '0.0'}/30
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Button onClick={saveAll} disabled={saving}>
+                  <Save size={16} /> {saving ? 'Saving…' : 'Save All Marks'}
+                </Button>
+                <span className="text-xs text-slate-500">
+                  Internal = max(Mid-1, Mid-2). Written ÷ 2 + Online + Assignment.
                 </span>
-              ),
-            },
-            {
-              key: 'name', label: 'Name',
-              render: (r) => r.studentId?.name || '—',
-            },
-            {
-              key: 'section', label: 'Sec',
-              render: (r) => r.studentId?.section || '—',
-            },
-            {
-              key: 'subject', label: 'Subject',
-              render: (r) => (
-                <span className="flex items-center gap-2">
-                  {r.subjectId?.subjectCode}
-                  <Badge variant={r.subjectId?.type === 'LAB' ? 'warning' : 'brand'}>
-                    {r.subjectId?.type || 'THEORY'}
-                  </Badge>
-                </span>
-              ),
-            },
-            {
-              key: 'mid1', label: 'Mid-1',
-              render: (r) => `${r.mid1?.total ?? 0}/30`,
-            },
-            {
-              key: 'mid2', label: 'Mid-2',
-              render: (r) => `${r.mid2?.total ?? 0}/30`,
-            },
-            {
-              key: 'internal', label: 'Internal',
-              render: (r) => <strong>{r.internalMarks ?? 0}/30</strong>,
-            },
-            {
-              key: 'status', label: 'Status',
-              render: (r) => (
-                <Badge
-                  variant={
-                    r.status === 'PUBLISHED'
-                      ? 'success'
-                      : r.status === 'LOCKED'
-                      ? 'danger'
-                      : 'warning'
-                  }
-                >
-                  {r.status}
-                </Badge>
-              ),
-            },
-            {
-              key: 'action', label: '', render: (r) => (
-                <div className="flex gap-2 items-center">
-                  {r.status === 'DRAFT' && (
-                    <Button variant="secondary" onClick={() => publish(r._id)}>
-                      Publish
-                    </Button>
-                  )}
-                  <button
-                    onClick={() => removeMarks(r._id, r.status)}
-                    className={
-                      r.status === 'LOCKED'
-                        ? 'text-slate-300 cursor-not-allowed'
-                        : 'text-red-500 hover:text-red-700'
-                    }
-                    title={r.status === 'LOCKED' ? 'Locked — contact admin' : 'Delete marks'}
-                    disabled={r.status === 'LOCKED'}
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ),
-            },
-          ]}
-          data={marks}
-        />
-      </Card>
+              </div>
+            </>
+          )}
+        </Card>
+      )}
+
+      {subjectId && records.length > 0 && (
+        <Card title={`Marks Records (${records.length})`}>
+          <Table
+            empty="No records."
+            columns={[
+              { key: 'roll', label: 'Roll', render: (r) => r.studentId?.rollNumber || '—' },
+              { key: 'name', label: 'Name', render: (r) => r.studentId?.name || '—' },
+              { key: 'mid1', label: 'Mid-1', render: (r) => `${r.mid1?.total ?? 0}/30` },
+              { key: 'mid2', label: 'Mid-2', render: (r) => `${r.mid2?.total ?? 0}/30` },
+              { key: 'internal', label: 'Internal', render: (r) => <strong>{r.internalMarks ?? 0}/30</strong> },
+              { key: 'status', label: 'Status',
+                render: (r) => <Badge variant={r.status === 'PUBLISHED' ? 'success' : r.status === 'LOCKED' ? 'danger' : 'warning'}>{r.status}</Badge> },
+              { key: 'action', label: '', render: (r) =>
+                r.status === 'DRAFT' && <Button variant="secondary" onClick={() => publishOne(r._id)}>Publish</Button> },
+            ]}
+            data={records}
+          />
+        </Card>
+      )}
     </div>
   );
 }

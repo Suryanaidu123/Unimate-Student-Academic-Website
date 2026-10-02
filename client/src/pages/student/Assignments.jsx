@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api.js';
+import { useBadges } from '../../context/BadgeContext.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 
 export default function StudentAssignments() {
   const [items, setItems] = useState([]);
+  const { markRead } = useBadges();
+useEffect(() => { markRead('assignments'); }, [markRead]);
   useEffect(() => { api.get('/assignments').then((r) => setItems(r.data.data.items)); }, []);
 
   return (

@@ -16,6 +16,7 @@ const empty = {
   type: 'THEORY',
   credits: 3,
   facultyId: '',
+  description: '',
 };
 
 export default function AdminSubjects() {
@@ -30,16 +31,29 @@ export default function AdminSubjects() {
   const [saving, setSaving] = useState(false);
   const [typeFilter, setTypeFilter] = useState('');
 
+  const [confirmRow, setConfirmRow] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+
   function load() {
     const params = new URLSearchParams({
       year: String(year),
       semester: String(semester),
       limit: '200',
     });
-    if (typeFilter) params.set('type', typeFilter);
+
+    if (typeFilter === 'THEORY' || typeFilter === 'LAB' || typeFilter === 'ACTIVITY') {
+      params.set('type', typeFilter);
+    }
 
     api.get(`/subjects?${params.toString()}`)
-      .then((r) => setItems(r.data.data.items || []))
+      .then((r) => {
+        let list = r.data.data.items || [];
+        // Default (no specific type filter): hide activities
+        if (!typeFilter) {
+          list = list.filter((s) => s.type !== 'ACTIVITY');
+        }
+        setItems(list);
+      })
       .catch(() => toast.error('Failed to load subjects'));
 
     api.get('/faculty?limit=200')
@@ -60,8 +74,9 @@ export default function AdminSubjects() {
       subjectName: row.subjectName,
       subjectCode: row.subjectCode,
       type: row.type || 'THEORY',
-      credits: row.credits,
+      credits: row.credits ?? 3,
       facultyId: row.facultyId?._id || row.facultyId || '',
+      description: row.description || '',
     });
     setOpen(true);
   }
@@ -74,17 +89,18 @@ export default function AdminSubjects() {
         subjectName: form.subjectName.trim(),
         subjectCode: form.subjectCode.trim().toUpperCase(),
         type: form.type,
-        credits: Number(form.credits),
+        credits: Number(form.credits || 0),
         year: Number(year),
         semester: Number(semester),
         facultyId: form.facultyId || null,
+        description: form.description.trim(),
       };
       if (editing) {
         await api.put(`/subjects/${editing}`, payload);
-        toast.success('Subject updated');
+        toast.success('Updated successfully.');
       } else {
         await api.post('/subjects', payload);
-        toast.success('Subject created');
+        toast.success('Created successfully.');
       }
       setOpen(false);
       setForm(empty);
@@ -97,44 +113,49 @@ export default function AdminSubjects() {
     }
   }
 
-  async function removeSubject(row) {
-    if (!window.confirm(`Delete subject "${row.subjectCode} — ${row.subjectName}"?`)) return;
+  async function doDelete() {
+    if (!confirmRow) return;
+    setDeleting(true);
     try {
-      await api.delete(`/subjects/${row._id}`);
-      toast.success('Subject deleted');
+      await api.delete(`/subjects/${confirmRow._id}`);
+      toast.success('Subject deleted successfully.');
+      setConfirmRow(null);
       load();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete');
+    } finally {
+      setDeleting(false);
     }
   }
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Subjects &amp; Labs</h1>
           <p className="text-sm text-slate-500">
-            {activeKey
-              ? `Managing ${activeKey.label} · ${activeKey.fullLabel}`
-              : 'Managing subjects'}
+            {activeKey ? `${activeKey.label} · ${activeKey.fullLabel}` : 'Managing subjects'}
+          </p>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Activities (Skilling Practice, NPTEL, etc.) are managed separately in the Timetable section.
+            Use the Type filter above to view them.
           </p>
         </div>
         <div className="flex gap-2">
           <select
-            className="input !w-40"
+            className="input !w-44"
             value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
           >
-            <option value="">All types</option>
-            <option value="THEORY">Theory</option>
-            <option value="LAB">Lab</option>
+            <option value="">Subjects &amp; Labs</option>
+            <option value="THEORY">Theory only</option>
+            <option value="LAB">Labs only</option>
+            <option value="ACTIVITY">Activities only</option>
           </select>
           <Button onClick={openCreate}>+ Add Subject</Button>
         </div>
       </div>
 
-      {/* Semester switcher — always visible, lets admin jump between all 6 */}
       <Card title="Semester">
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {SEMESTER_KEYS.map((s) => {
@@ -158,53 +179,32 @@ export default function AdminSubjects() {
             );
           })}
         </div>
-        <p className="text-xs text-slate-500 mt-3">
-          Click any semester above to switch. Every semester has its own subjects, faculty
-          assignments, timetable, marks, and materials.
-        </p>
       </Card>
 
-      {/* Subjects table */}
-      <Card title={`${activeKey?.label || ''} Subjects (${items.length})`}>
+      <Card title={`${activeKey?.label || ''} — ${items.length} item${items.length === 1 ? '' : 's'}`}>
         <Table
-          empty={`No subjects configured for ${activeKey?.label || 'this semester'} yet.`}
+          empty={`Nothing found for ${activeKey?.label || 'this semester'}.`}
           columns={[
             { key: 'subjectCode', label: 'Code' },
             { key: 'subjectName', label: 'Name' },
             {
-              key: 'type',
-              label: 'Type',
-              render: (r) => (
-                <Badge variant={r.type === 'LAB' ? 'warning' : 'brand'}>
-                  {r.type || 'THEORY'}
-                </Badge>
-              ),
+              key: 'type', label: 'Type',
+              render: (r) => {
+                const v = r.type === 'LAB' ? 'warning' : r.type === 'ACTIVITY' ? 'info' : 'brand';
+                return <Badge variant={v}>{r.type || 'THEORY'}</Badge>;
+              },
             },
             { key: 'year', label: 'Yr' },
             { key: 'semester', label: 'Sem' },
             { key: 'credits', label: 'Credits' },
+            { key: 'faculty', label: 'Faculty', render: (r) => r.facultyId?.name || '—' },
             {
-              key: 'faculty',
-              label: 'Faculty',
-              render: (r) => r.facultyId?.name || '—',
-            },
-            {
-              key: 'actions',
-              label: '',
-              render: (r) => (
+              key: 'actions', label: '', render: (r) => (
                 <div className="flex gap-3">
-                  <button
-                    onClick={() => openEdit(r)}
-                    className="text-brand-600 hover:text-brand-800"
-                    title="Edit"
-                  >
+                  <button onClick={() => openEdit(r)} className="text-brand-600 hover:text-brand-800">
                     <Pencil size={15} />
                   </button>
-                  <button
-                    onClick={() => removeSubject(r)}
-                    className="text-red-500 hover:text-red-700"
-                    title="Delete"
-                  >
+                  <button onClick={() => setConfirmRow(r)} className="text-red-500 hover:text-red-700">
                     <Trash2 size={15} />
                   </button>
                 </div>
@@ -215,83 +215,77 @@ export default function AdminSubjects() {
         />
       </Card>
 
-      {/* Add / Edit modal */}
-      <Modal
-        open={open}
-        onClose={() => setOpen(false)}
-        title={
-          editing
-            ? `Edit Subject — ${activeKey?.label || ''}`
-            : `Add Subject / Lab — ${activeKey?.label || ''}`
-        }
-      >
+      <Modal open={open} onClose={() => setOpen(false)}
+        title={editing ? 'Edit' : `Add — ${activeKey?.label || ''}`}>
         <form onSubmit={onSubmit} className="space-y-3">
-          <Input
-            label="Subject Name"
-            required
-            value={form.subjectName}
+          <Input label="Name" required value={form.subjectName}
             onChange={(e) => setForm({ ...form, subjectName: e.target.value })}
-            placeholder="e.g. Machine Learning"
-          />
+            placeholder="e.g. Machine Learning / Skilling Practice" />
 
-          <Input
-            label="Subject Code"
-            required
-            value={form.subjectCode}
+          <Input label="Code" required value={form.subjectCode}
             onChange={(e) => setForm({ ...form, subjectCode: e.target.value })}
-            placeholder="e.g. AIML501"
-          />
+            placeholder="e.g. AIML501 / SKILL5" />
 
           <label className="block">
             <span className="label">Type</span>
-            <select
-              className="input"
-              required
-              value={form.type}
-              onChange={(e) => setForm({ ...form, type: e.target.value })}
-            >
-              <option value="THEORY">Theory</option>
+            <select className="input" required value={form.type}
+              onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <option value="THEORY">Theory Subject</option>
               <option value="LAB">Lab</option>
+              <option value="ACTIVITY">Activity (Skilling / NPTEL / Other)</option>
             </select>
           </label>
 
-          <Input
-            label="Credits (e.g. 1.5, 2, 3, 4.5)"
-            type="number"
-            step="0.5"
-            min={0.5}
-            max={6}
-            required
+          <Input label="Credits" type="number" step="0.5" min={0} max={6}
             value={form.credits}
-            onChange={(e) => setForm({ ...form, credits: e.target.value })}
-          />
+            onChange={(e) => setForm({ ...form, credits: e.target.value })} />
 
           <label className="block">
-            <span className="label">Assigned Faculty (optional)</span>
-            <select
-              className="input"
-              value={form.facultyId}
-              onChange={(e) => setForm({ ...form, facultyId: e.target.value })}
-            >
+            <span className="label">Faculty (optional)</span>
+            <select className="input" value={form.facultyId}
+              onChange={(e) => setForm({ ...form, facultyId: e.target.value })}>
               <option value="">— None —</option>
               {faculties.map((f) => (
-                <option key={f._id} value={f._id}>
-                  {f.employeeId} — {f.name || '(not registered)'}
-                </option>
+                <option key={f._id} value={f._id}>{f.employeeId} — {f.name || '(pending)'}</option>
               ))}
             </select>
           </label>
 
+          <label className="block">
+            <span className="label">Description (optional)</span>
+            <textarea className="input" rows={2} value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })} />
+          </label>
+
           <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2">
             Saving to: <b>{activeKey?.label}</b> · {activeKey?.fullLabel}
-            <br />
-            Year {year} · Semester {semester}
           </div>
 
           <Button type="submit" className="w-full" disabled={saving}>
-            {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create Subject'}
+            {saving ? 'Saving…' : editing ? 'Save Changes' : 'Create'}
           </Button>
         </form>
+      </Modal>
+
+      <Modal open={!!confirmRow} onClose={() => setConfirmRow(null)} title="Delete?">
+        {confirmRow && (
+          <div className="space-y-4">
+            <p className="text-sm text-slate-700">
+              Delete <b>{confirmRow.subjectCode} — {confirmRow.subjectName}</b>?
+            </p>
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3">
+              This cannot be undone. If the subject is used in marks, timetable, or materials, deletion is blocked.
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmRow(null)} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={doDelete} disabled={deleting}>
+                <Trash2 size={14} /> {deleting ? 'Deleting…' : 'Delete'}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

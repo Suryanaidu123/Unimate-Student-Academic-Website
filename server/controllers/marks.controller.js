@@ -10,6 +10,14 @@ exports.upsert = async (req, res, next) => {
   } catch (e) { next(e); }
 };
 
+exports.bulkUpsert = async (req, res, next) => {
+  try {
+    if (req.user.role === 'STUDENT') throw ApiError.forbidden();
+    const data = await service.bulkUpsertMarks(req.body, req.user);
+    return success(res, data, `Saved ${data.saved} record(s)`);
+  } catch (e) { next(e); }
+};
+
 exports.my = async (req, res, next) => {
   try {
     const data = await service.listMy(req.user.studentId);
@@ -23,37 +31,36 @@ exports.list = async (req, res, next) => {
       return success(res, await service.listForFaculty(req.user.facultyId, req.query));
     }
     if (req.user.role === 'ADMIN') {
-  const Marks = require('../models/Marks.model');
-  const Student = require('../models/Student.model');
+      const Marks = require('../models/Marks.model');
+      const Student = require('../models/Student.model');
 
-  const { year, semester, subjectId, status, section } = req.query;
-  const query = {};
-  if (subjectId) query.subjectId = subjectId;
-  if (status) query.status = status;
+      const { year, semester, subjectId, status, section } = req.query;
+      const query = {};
+      if (subjectId) query.subjectId = subjectId;
+      if (status) query.status = status;
 
-  // Filter students by year + semester + section
-  const studentQ = { status: 'ACTIVE' };
-  if (year) studentQ.year = Number(year);
-  if (semester) studentQ.currentSemester = Number(semester);
-  if (section) studentQ.section = section;
+      const studentQ = { status: 'ACTIVE' };
+      if (year) studentQ.year = Number(year);
+      if (semester) studentQ.currentSemester = Number(semester);
+      if (section) studentQ.section = section;
 
-  const students = await Student.find(studentQ).select('_id');
-  query.studentId = { $in: students.map((s) => s._id) };
+      const students = await Student.find(studentQ).select('_id');
+      query.studentId = { $in: students.map((s) => s._id) };
 
-  const items = await Marks.find(query)
-    .populate('studentId', 'rollNumber name section year currentSemester')
-    .populate('subjectId', 'subjectName subjectCode type')
-    .sort({ createdAt: -1 });
+      const items = await Marks.find(query)
+        .populate('studentId', 'rollNumber name section year currentSemester')
+        .populate('subjectId', 'subjectName subjectCode type')
+        .sort({ createdAt: -1 });
 
-  return success(res, { items, total: items.length });
-}
+      return success(res, { items, total: items.length });
+    }
     throw ApiError.forbidden();
   } catch (e) { next(e); }
 };
 
 exports.getById = async (req, res, next) => {
   try {
-    const m = await service.getById(req.params.id);
+    const m = await service.getById(req.params.id, req.user);
     if (req.user.role === 'STUDENT' && String(m.studentId._id) !== String(req.user.studentId)) {
       throw ApiError.forbidden();
     }

@@ -23,14 +23,27 @@ async function ensureDefaultCourse(departmentId) {
   return course;
 }
 
-async function list({ q, year, type, semester, semesterId, facultyId, status, page = 1, limit = 50 }) {
+/**
+ * List subjects.
+ * - Admin: all subjects matching query.
+ * - Faculty: only subjects where `facultyId` matches their own.
+ */
+async function list({ q, year, type, semester, semesterId, facultyId, status, page = 1, limit = 200 }, user) {
   const query = {};
+
   if (year) query.year = Number(year);
   if (type) query.type = type;
   if (semester) query.semester = Number(semester);
   if (semesterId) query.semesterId = semesterId;
-  if (facultyId) query.facultyId = facultyId;
   if (status) query.status = status;
+
+  // Force faculty scope: faculty only see their own assigned subjects
+  if (user && user.role === 'FACULTY') {
+    query.facultyId = user.facultyId;
+  } else if (facultyId) {
+    query.facultyId = facultyId;
+  }
+
   if (q) {
     query.$or = [
       { subjectName: new RegExp(q, 'i') },
@@ -41,15 +54,13 @@ async function list({ q, year, type, semester, semesterId, facultyId, status, pa
   const [items, total] = await Promise.all([
     Subject.find(query)
       .populate('facultyId', 'name employeeId')
-      .sort({ subjectCode: 1 })
       .skip((page - 1) * limit)
       .limit(limit),
     Subject.countDocuments(query),
   ]);
 
-  // Theory first, then Lab
+  const rank = (s) => (s.type === 'LAB' ? 1 : s.type === 'ACTIVITY' ? 2 : 0);
   items.sort((a, b) => {
-    const rank = (s) => (s.type === 'LAB' ? 1 : 0);
     if (rank(a) !== rank(b)) return rank(a) - rank(b);
     return String(a.subjectCode).localeCompare(String(b.subjectCode));
   });
@@ -77,22 +88,25 @@ async function create(data, actor) {
   const year = Number(data.year);
   if (![2, 3, 4].includes(year)) throw ApiError.badRequest('Year must be 2, 3 or 4');
 
-  // Default semester to the first semester of the year
   const semester = data.semester ? Number(data.semester) : 2 * year - 1;
   const validSems = [2 * year - 1, 2 * year];
   if (!validSems.includes(semester)) {
     throw ApiError.badRequest(`Semester for Year ${year} must be ${validSems[0]} or ${validSems[1]}`);
   }
 
+  const type = data.type || 'THEORY';
+  const credits = Number(data.credits || 0);
+
   const payload = {
     subjectName: data.subjectName.trim(),
     subjectCode: data.subjectCode.trim().toUpperCase(),
-    type: data.type || 'THEORY',
-    credits: data.credits,
+    type,
+    credits,
     year,
     semester,
     departmentId: dep._id,
     courseId: course._id,
+    description: data.description || '',
     status: data.status || 'ACTIVE',
   };
   if (isValidObjectId(data.semesterId)) payload.semesterId = data.semesterId;
@@ -114,6 +128,13 @@ async function update(id, data, actor) {
   const old = await Subject.findById(id);
   if (!old) throw ApiError.notFound('Subject not found');
 
+  // Faculty may only edit faculty-assignment on their own subjects, and only to themselves
+  if (actor?.role === 'FACULTY') {
+    if (String(old.facultyId) !== String(actor.facultyId)) {
+      throw ApiError.forbidden('You can only edit subjects assigned to you.');
+    }
+  }
+
   const patch = {};
 
   if (data.subjectName !== undefined) patch.subjectName = data.subjectName.trim();
@@ -124,12 +145,18 @@ async function update(id, data, actor) {
     patch.subjectCode = code;
   }
   if (data.type !== undefined) patch.type = data.type;
-  if (data.credits !== undefined) patch.credits = data.credits;
+  if (data.credits !== undefined) patch.credits = Number(data.credits || 0);
   if (data.year !== undefined) patch.year = Number(data.year);
   if (data.semester !== undefined) patch.semester = Number(data.semester);
+  if (data.description !== undefined) patch.description = data.description;
 
   if (data.facultyId !== undefined) {
-    if (data.facultyId === null || data.facultyId === '') {
+    if (actor?.role === 'FACULTY') {
+      // Faculty can only keep the assignment as themselves
+      if (data.facultyId && String(data.facultyId) !== String(actor.facultyId)) {
+        throw ApiError.forbidden('You cannot reassign this subject to another faculty.');
+      }
+    } else if (data.facultyId === null || data.facultyId === '') {
       patch.facultyId = null;
     } else if (isValidObjectId(data.facultyId)) {
       patch.facultyId = data.facultyId;
@@ -154,10 +181,23 @@ async function remove(id, actor) {
   if (!s) throw ApiError.notFound('Subject not found');
 
   const Marks = require('../models/Marks.model');
-  const marksCount = await Marks.countDocuments({ subjectId: id });
-  if (marksCount > 0) {
+  const Timetable = require('../models/Timetable.model');
+  const Material = require('../models/Material.model');
+
+  const [marksCount, ttCount, matCount] = await Promise.all([
+    Marks.countDocuments({ subjectId: id }),
+    Timetable.countDocuments({ subjectId: id }),
+    Material.countDocuments({ subjectId: id }),
+  ]);
+
+  const blockers = [];
+  if (marksCount > 0) blockers.push(`${marksCount} marks record(s)`);
+  if (ttCount > 0) blockers.push(`${ttCount} timetable slot(s)`);
+  if (matCount > 0) blockers.push(`${matCount} material(s)`);
+
+  if (blockers.length) {
     throw ApiError.conflict(
-      `Cannot delete — this subject has ${marksCount} marks record(s). Deactivate it instead.`
+      `Cannot delete — this subject is used in ${blockers.join(', ')}. Remove those first or deactivate the subject.`
     );
   }
 
@@ -169,4 +209,11 @@ async function remove(id, actor) {
   return { ok: true };
 }
 
-module.exports = { list, getById, create, update, remove };
+/**
+ * Return the list of subject IDs assigned to a given faculty user.
+ */
+async function subjectsForFaculty(facultyId) {
+  return Subject.find({ facultyId }).select('_id');
+}
+
+module.exports = { list, getById, create, update, remove, subjectsForFaculty };

@@ -12,9 +12,11 @@
     "seed:semesters": "node scripts/seedSemesters.js",
     "seed:sections": "node scripts/seedSections.js",
     "fix:semesters": "node scripts/fixCurrentSemester.js",
-    "fix:subjects": "node scripts/fixSubjectSemesters.js"
+    "fix:subjects": "node scripts/fixSubjectSemesters.js",
+    "clear:timetable": "node scripts/clearTimetable.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.117.2",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",

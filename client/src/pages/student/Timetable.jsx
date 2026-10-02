@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, User, BookOpen, Coffee, Utensils } from 'lucide-react';
+import { Clock, User, BookOpen, RefreshCw, FlaskConical, Star } from 'lucide-react';
 import api from '../../services/api.js';
+import { useBadges } from '../../context/BadgeContext.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Badge from '../../components/ui/Badge.jsx';
+import Button from '../../components/ui/Button.jsx';
 
 const DAYS = [
   { key: 'MON', label: 'Monday', short: 'Mon' },
@@ -24,22 +26,42 @@ function to12h(t) {
   return `${h12}:${String(mm).padStart(2, '0')} ${suffix}`;
 }
 
+const subjectIcon = (type) => {
+  if (type === 'LAB') return <FlaskConical size={12} className="text-amber-600" />;
+  if (type === 'ACTIVITY') return <Star size={12} className="text-purple-600" />;
+  return <BookOpen size={12} className="text-brand-600" />;
+};
+
 export default function StudentTimetable() {
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeDay, setActiveDay] = useState('MON');
   const [me, setMe] = useState(null);
 
+  async function fetchAll(isRefresh = false) {
+    if (isRefresh) setRefreshing(true); else setLoading(true);
+    try {
+      const [t, m] = await Promise.all([
+        api.get(`/timetable/my?_=${Date.now()}`),
+        api.get('/auth/me'),
+      ]);
+      setSlots(t.data.data || []);
+      setMe(m.data.data);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }
+
+const { markRead } = useBadges();
+useEffect(() => { markRead('timetable'); }, [markRead]);
+  useEffect(() => { fetchAll(); }, []);
+
   useEffect(() => {
-    Promise.all([
-      api.get('/timetable/my'),
-      api.get('/auth/me'),
-    ])
-      .then(([t, m]) => {
-        setSlots(t.data.data || []);
-        setMe(m.data.data);
-      })
-      .finally(() => setLoading(false));
+    function onFocus() { fetchAll(true); }
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, []);
 
   const byDay = useMemo(() => {
@@ -73,10 +95,8 @@ export default function StudentTimetable() {
         onClick={() => setActiveDay(day.key)}
         disabled={!has}
         className={`relative flex flex-col items-center justify-center rounded-lg border px-3 py-3 transition text-sm font-medium ${
-          isActive
-            ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
-            : has
-            ? 'bg-white text-slate-700 border-slate-300 hover:border-brand-400'
+          isActive ? 'bg-brand-600 text-white border-brand-600 shadow-sm'
+            : has ? 'bg-white text-slate-700 border-slate-300 hover:border-brand-400'
             : 'bg-slate-50 text-slate-300 border-slate-200 cursor-not-allowed'
         }`}
       >
@@ -109,20 +129,30 @@ export default function StudentTimetable() {
 
   const profile = me?.profile;
 
+  const header = (
+    <div className="flex items-center justify-between flex-wrap gap-3">
+      <div>
+        <h1 className="text-2xl font-bold text-slate-900">Weekly Timetable</h1>
+        {profile && (
+          <p className="text-sm text-slate-500">
+            {profile.year === 2 ? '2nd' : profile.year === 3 ? '3rd' : '4th'} Year ·
+            Semester {profile.semester} · Section {profile.section}
+          </p>
+        )}
+      </div>
+      <Button variant="secondary" onClick={() => fetchAll(true)} disabled={refreshing}>
+        <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} /> Refresh
+      </Button>
+    </div>
+  );
+
   if (slots.length === 0) {
     return (
       <div className="space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Weekly Timetable</h1>
-          {profile && (
-            <p className="text-sm text-slate-500">
-              {profile.year === 2 ? '2nd' : profile.year === 3 ? '3rd' : '4th'} Year · Semester {profile.semester} · Section {profile.section}
-            </p>
-          )}
-        </div>
+        {header}
         <Card>
           <p className="text-sm text-slate-500 py-8 text-center">
-            No timetable has been published for your semester yet.
+            No timetable published for your semester yet.
           </p>
         </Card>
       </div>
@@ -131,14 +161,7 @@ export default function StudentTimetable() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Weekly Timetable</h1>
-        {profile && (
-          <p className="text-sm text-slate-500">
-            {profile.year === 2 ? '2nd' : profile.year === 3 ? '3rd' : '4th'} Year · Semester {profile.semester} · Section {profile.section}
-          </p>
-        )}
-      </div>
+      {header}
 
       <Card>
         <div className="space-y-2">
@@ -175,11 +198,9 @@ export default function StudentTimetable() {
                     className={`flex items-center gap-3 p-3 rounded-lg border ${
                       isLunch ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-200'
                     }`}>
-                    <div className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
-                      isLunch ? 'bg-orange-500 text-white' : 'bg-slate-400 text-white'
-                    }`}>
-                      {isLunch ? <Utensils size={12} /> : <Coffee size={12} />}
-                    </div>
+                    <div className={`shrink-0 w-1 rounded-full self-stretch ${
+                      isLunch ? 'bg-orange-500' : 'bg-slate-400'
+                    }`} />
                     <div className="flex-1">
                       <p className={`text-sm font-semibold ${isLunch ? 'text-orange-800' : 'text-slate-700'}`}>
                         {isLunch ? 'Lunch Break' : 'Break'}
@@ -197,31 +218,25 @@ export default function StudentTimetable() {
 
               return (
                 <li key={slot._id}
-                  className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition">
-                  <div className="shrink-0 w-6 h-6 rounded-full bg-brand-600 text-white flex items-center justify-center">
-                    <BookOpen size={12} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-slate-900 truncate">
-                      {slot.subjectId?.subjectCode} — {slot.subjectId?.subjectName}
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-600">
-                      <span className="inline-flex items-center gap-1">
-                        <Clock size={12} />
-                        {to12h(slot.startTime)} – {to12h(slot.endTime)}
-                      </span>
-                      {slot.facultyId?.name && (
-                        <span className="inline-flex items-center gap-1">
-                          <User size={12} />
-                          {slot.facultyId.name}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  {slot.subjectId?.type === 'LAB' && (
-                    <Badge variant="warning">LAB</Badge>
-                  )}
-                </li>
+  className="flex items-start gap-3 p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition">
+  <div className="flex-1 min-w-0">
+    <div className="text-sm font-semibold text-slate-900">
+      {slot.subjectId?.subjectName || '—'}
+    </div>
+    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-600">
+      <span className="inline-flex items-center gap-1">
+        <Clock size={12} /> {to12h(slot.startTime)} – {to12h(slot.endTime)}
+      </span>
+      {slot.facultyId?.name && (
+        <span className="inline-flex items-center gap-1">
+          <User size={12} /> {slot.facultyId.name}
+        </span>
+      )}
+    </div>
+  </div>
+  {slot.subjectId?.type === 'LAB' && <Badge variant="warning">LAB</Badge>}
+  {slot.subjectId?.type === 'ACTIVITY' && <Badge variant="info">ACTIVITY</Badge>}
+</li>
               );
             })}
           </ul>

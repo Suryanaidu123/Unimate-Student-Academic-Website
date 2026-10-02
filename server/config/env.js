@@ -22,4 +22,8 @@ module.exports = {
 
   OTP_TTL_MINUTES: Number(process.env.OTP_TTL_MINUTES || 10),
   OTP_MAX_ATTEMPTS: Number(process.env.OTP_MAX_ATTEMPTS || 5),
+
+  SUPABASE_URL: process.env.SUPABASE_URL || '',
+  SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
+  SUPABASE_BUCKET: process.env.SUPABASE_BUCKET || 'materials',
 };

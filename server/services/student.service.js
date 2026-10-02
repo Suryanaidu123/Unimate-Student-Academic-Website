@@ -11,13 +11,15 @@ const BATCH_MAP = {
   4: { batch: '2023-2027', admissionYear: 2023 },
 };
 
-async function list({ q, year, semester, section, batch, status, page = 1, limit = 200 }) {
+async function list({ q, year, semester, section, batch, status, page = 1, limit = 500 }) {
   const query = {};
+
   if (year) query.year = Number(year);
   if (semester) query.currentSemester = Number(semester);
   if (section) query.section = section;
   if (batch) query.batch = batch;
   if (status) query.status = status;
+
   if (q) {
     query.$or = [
       { rollNumber: new RegExp(q, 'i') },
@@ -27,12 +29,23 @@ async function list({ q, year, semester, section, batch, status, page = 1, limit
   }
 
   const [items, total] = await Promise.all([
-    Student.find(query)
-      .sort({ year: 1, section: 1, rollNumber: 1 })
-      .skip((page - 1) * limit)
-      .limit(limit),
+    Student.find(query).skip((page - 1) * limit).limit(limit),
     Student.countDocuments(query),
   ]);
+
+  // Natural sort: year → semester → roll number (numeric-aware)
+  items.sort((a, b) => {
+    if (a.year !== b.year) return a.year - b.year;
+    const sa = a.currentSemester || a.semester || 0;
+    const sb = b.currentSemester || b.semester || 0;
+    if (sa !== sb) return sa - sb;
+    return String(a.rollNumber || '').localeCompare(
+      String(b.rollNumber || ''),
+      undefined,
+      { numeric: true, sensitivity: 'base' }
+    );
+  });
+
   return { items, total, page, limit };
 }
 
@@ -52,7 +65,7 @@ async function create(data, actor) {
   });
   if (dup) throw ApiError.conflict('Student with same roll number or email already exists');
 
-  const firstSem = 2 * year - 1;   // Year 2 → Sem 3, Year 3 → Sem 5, Year 4 → Sem 7
+  const firstSem = 2 * year - 1;
 
   const payload = {
     rollNumber: data.rollNumber.trim(),
@@ -67,6 +80,7 @@ async function create(data, actor) {
     admissionYear: meta.admissionYear,
     department: 'AI & ML',
     course: 'B.Tech AI & ML',
+    status: 'ACTIVE',
   };
 
   const s = await Student.create(payload);
@@ -96,7 +110,6 @@ async function update(id, data, actor) {
 
   if (data.name !== undefined) patch.name = String(data.name).trim();
 
-  // When the year changes, auto-reset to first semester of the new year
   if (data.year !== undefined) {
     const y = Number(data.year);
     const meta = BATCH_MAP[y];
@@ -112,7 +125,6 @@ async function update(id, data, actor) {
     }
   }
 
-  // If the admin explicitly changes the semester
   if (data.currentSemester !== undefined) {
     const sem = Number(data.currentSemester);
     patch.currentSemester = sem;

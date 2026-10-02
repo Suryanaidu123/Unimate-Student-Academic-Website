@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import api from '../../services/api.js';
+import { useBadges } from '../../context/BadgeContext.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Table from '../../components/ui/Table.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 
 export default function StudentMarks() {
   const [rows, setRows] = useState([]);
+  const { markRead } = useBadges();
+useEffect(() => { markRead('marks'); }, [markRead]);
   useEffect(() => { api.get('/marks/my').then((r) => setRows(r.data.data)); }, []);
 
   const columns = [

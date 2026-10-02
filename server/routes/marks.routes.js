@@ -10,6 +10,7 @@ router.get('/my', requireRole('STUDENT'), ctrl.my);
 router.get('/', requireRole('FACULTY', 'ADMIN'), ctrl.list);
 router.get('/:id', ctrl.getById);
 
+router.post('/bulk', requireRole('FACULTY', 'ADMIN'), ctrl.bulkUpsert);
 router.post('/', requireRole('FACULTY', 'ADMIN'), validate(upsertMarksSchema), ctrl.upsert);
 router.post('/:id/publish', requireRole('FACULTY', 'ADMIN'), ctrl.publish);
 router.post('/:id/lock', requireRole('ADMIN'), ctrl.lock);
