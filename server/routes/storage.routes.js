@@ -4,8 +4,11 @@ const { requireAuth } = require('../middleware/auth');
 const { requireRole } = require('../middleware/role');
 
 router.use(requireAuth, requireRole('ADMIN'));
-
-router.get('/stats', ctrl.mongoStats);            // existing
-router.get('/supabase-stats', ctrl.supabaseStats); // new
+router.delete('/activity/:id', ctrl.deleteActivity);
+router.delete('/activity', ctrl.deleteAllActivity);
+router.get('/stats', ctrl.mongoStats);
+router.get('/b2-stats', ctrl.b2Stats);
+router.get('/download-stats', ctrl.downloadStats);
+router.get('/activity', ctrl.activity);
 
 module.exports = router;

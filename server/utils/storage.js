@@ -1,71 +1,93 @@
-const { createClient } = require('@supabase/supabase-js');
+const {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+} = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 const env = require('../config/env');
 
-if (!env.SUPABASE_URL || !env.SUPABASE_SERVICE_KEY) {
-  console.warn('⚠️  Supabase credentials missing — material uploads will fail.');
+if (!env.B2_KEY_ID || !env.B2_APPLICATION_KEY || !env.B2_ENDPOINT) {
+  console.warn('⚠️  Backblaze B2 credentials missing — material uploads will fail.');
 }
 
-const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY, {
-  auth: { persistSession: false, autoRefreshToken: false },
+const s3 = new S3Client({
+  region: env.B2_REGION,
+  endpoint: env.B2_ENDPOINT,
+  credentials: {
+    accessKeyId: env.B2_KEY_ID,
+    secretAccessKey: env.B2_APPLICATION_KEY,
+  },
+  forcePathStyle: true,
 });
 
-const BUCKET = env.SUPABASE_BUCKET;
+const BUCKET = env.B2_BUCKET;
 
-/**
- * Upload a PDF buffer to Supabase Storage.
- * Returns { key, fileName } where `key` is the object path inside the bucket.
- */
 async function uploadPdf(buffer, originalName) {
-  // ✅ Generate a clean key — no bucket prefix, no leading slash, no special chars
-  const key = `${Date.now()}-${crypto.randomBytes(8).toString('hex')}.pdf`;
+  const key = `materials/${Date.now()}-${crypto.randomBytes(8).toString('hex')}.pdf`;
 
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .upload(key, buffer, {
-      contentType: 'application/pdf',
-      upsert: false,
-    });
+  await s3.send(new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    Body: buffer,
+    ContentType: 'application/pdf',
+  }));
 
-  if (error) {
-    console.error('Supabase upload error:', error);
-    throw new Error(`Supabase upload failed: ${error.message}`);
-  }
-
-  // The path is what you store in MongoDB
-  return { key: data.path, fileName: originalName };
+  return { key, fileName: originalName };
 }
 
-/**
- * Delete an object from Supabase Storage by key.
- */
 async function deleteFile(key) {
   try {
-    const { error } = await supabase.storage.from(BUCKET).remove([key]);
-    if (error) console.error('Supabase delete error:', error.message);
+    await s3.send(new DeleteObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+    }));
   } catch (e) {
-    console.error('Supabase delete failed:', e.message);
+    console.error('B2 delete failed:', e.message);
   }
+}
+
+async function getSignedDownloadUrl(key, originalName = 'document.pdf', mode = 'inline') {
+  const cmd = new GetObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    ResponseContentDisposition: `${mode}; filename="${encodeURIComponent(originalName)}"`,
+  });
+  return getSignedUrl(s3, cmd, { expiresIn: 60 * 60 });
 }
 
 /**
- * Generate a signed URL (valid 1 hour) that lets the user view or download the file.
- * `mode` = 'inline' (view) or 'attachment' (download).
+ * Walk the bucket and sum every object's size.
+ * B2 S3-compatible list returns up to 1000 objects per page.
+ * For a college project this is usually a single call.
  */
-async function getSignedDownloadUrl(key, originalName = 'document.pdf', mode = 'inline') {
-  const options = mode === 'attachment'
-    ? { download: originalName }
-    : {};
+async function getStorageUsage() {
+  let totalBytes = 0;
+  let fileCount = 0;
+  let continuationToken;
 
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .createSignedUrl(key, 60 * 60, options);
+  do {
+    const res = await s3.send(new ListObjectsV2Command({
+      Bucket: BUCKET,
+      ContinuationToken: continuationToken,
+    }));
 
-  if (error) {
-    console.error('Supabase signed URL error:', error);
-    throw new Error(`Supabase signed URL failed: ${error.message}`);
-  }
-  return data.signedUrl;
+    (res.Contents || []).forEach((obj) => {
+      totalBytes += Number(obj.Size || 0);
+      fileCount += 1;
+    });
+
+    continuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return { totalBytes, fileCount };
 }
 
-module.exports = { uploadPdf, deleteFile, getSignedDownloadUrl };
+module.exports = {
+  uploadPdf,
+  deleteFile,
+  getSignedDownloadUrl,
+  getStorageUsage,
+};

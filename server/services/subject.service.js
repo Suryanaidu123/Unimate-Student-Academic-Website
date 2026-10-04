@@ -23,25 +23,32 @@ async function ensureDefaultCourse(departmentId) {
   return course;
 }
 
-/**
- * List subjects.
- * - Admin: all subjects matching query.
- * - Faculty: only subjects where `facultyId` matches their own.
- */
-async function list({ q, year, type, semester, semesterId, facultyId, status, page = 1, limit = 200 }, user) {
+async function list(
+  {
+    q, year, type, semester, semesterId, facultyId, status,
+    excludeActivities,   // 'true' | true — hide ACTIVITY rows from results
+    page = 1,
+    limit = 200,
+  },
+  user
+) {
   const query = {};
-
   if (year) query.year = Number(year);
   if (type) query.type = type;
   if (semester) query.semester = Number(semester);
   if (semesterId) query.semesterId = semesterId;
   if (status) query.status = status;
 
-  // Force faculty scope: faculty only see their own assigned subjects
+  // Faculty scope
   if (user && user.role === 'FACULTY') {
     query.facultyId = user.facultyId;
   } else if (facultyId) {
     query.facultyId = facultyId;
+  }
+
+  // Exclude activities if requested
+  if (excludeActivities === 'true' || excludeActivities === true) {
+    query.type = { $ne: 'ACTIVITY' };
   }
 
   if (q) {
@@ -97,9 +104,25 @@ async function create(data, actor) {
   const type = data.type || 'THEORY';
   const credits = Number(data.credits || 0);
 
+  // Auto-generate code for LAB / ACTIVITY when admin only gave a name
+  let code = (data.subjectCode || '').trim().toUpperCase();
+  if (!code) {
+    const prefix = type === 'LAB' ? 'LAB' : type === 'ACTIVITY' ? 'ACT' : 'SUB';
+    const nameSlug = String(data.subjectName || '')
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '')
+      .slice(0, 8) || 'X';
+    let candidate = `${prefix}${semester}${nameSlug}`;
+    let i = 1;
+    while (await Subject.findOne({ subjectCode: candidate })) {
+      candidate = `${prefix}${semester}${nameSlug}${i++}`;
+    }
+    code = candidate;
+  }
+
   const payload = {
     subjectName: data.subjectName.trim(),
-    subjectCode: data.subjectCode.trim().toUpperCase(),
+    subjectCode: code,
     type,
     credits,
     year,
@@ -128,7 +151,6 @@ async function update(id, data, actor) {
   const old = await Subject.findById(id);
   if (!old) throw ApiError.notFound('Subject not found');
 
-  // Faculty may only edit faculty-assignment on their own subjects, and only to themselves
   if (actor?.role === 'FACULTY') {
     if (String(old.facultyId) !== String(actor.facultyId)) {
       throw ApiError.forbidden('You can only edit subjects assigned to you.');
@@ -152,7 +174,6 @@ async function update(id, data, actor) {
 
   if (data.facultyId !== undefined) {
     if (actor?.role === 'FACULTY') {
-      // Faculty can only keep the assignment as themselves
       if (data.facultyId && String(data.facultyId) !== String(actor.facultyId)) {
         throw ApiError.forbidden('You cannot reassign this subject to another faculty.');
       }
@@ -209,9 +230,6 @@ async function remove(id, actor) {
   return { ok: true };
 }
 
-/**
- * Return the list of subject IDs assigned to a given faculty user.
- */
 async function subjectsForFaculty(facultyId) {
   return Subject.find({ facultyId }).select('_id');
 }

@@ -23,8 +23,10 @@ module.exports = {
   OTP_TTL_MINUTES: Number(process.env.OTP_TTL_MINUTES || 10),
   OTP_MAX_ATTEMPTS: Number(process.env.OTP_MAX_ATTEMPTS || 5),
 
-  SUPABASE_DB_URL: process.env.SUPABASE_DB_URL || '',
-  SUPABASE_URL: process.env.SUPABASE_URL || '',
-  SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY || '',
-  SUPABASE_BUCKET: process.env.SUPABASE_BUCKET || 'materials',
+  // Backblaze B2 (S3-compatible)
+  B2_KEY_ID: process.env.B2_KEY_ID || '',
+  B2_APPLICATION_KEY: process.env.B2_APPLICATION_KEY || '',
+  B2_BUCKET: process.env.B2_BUCKET || '',
+  B2_REGION: process.env.B2_REGION || 'us-east-005',
+  B2_ENDPOINT: process.env.B2_ENDPOINT || '',
 };

@@ -8,10 +8,11 @@ const userSchema = new mongoose.Schema({
   studentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', default: null },
   facultyId: { type: mongoose.Schema.Types.ObjectId, ref: 'Faculty', default: null },
   adminId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Admin',   default: null },
+  staffId:   { type: mongoose.Schema.Types.ObjectId, ref: 'Staff',   default: null },
   status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'ACTIVE' },
   lastLogin: { type: Date, default: null },
 }, { timestamps: true });
 
 userSchema.index({ role: 1, status: 1 });
 
-module.exports = mongoose.model('User', userSchema);
+module.exports = mongoose.models.User || mongoose.model('User', userSchema);

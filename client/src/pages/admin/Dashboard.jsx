@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Users, UserCheck, BookOpen, Layers, Database, Cloud, Trash2, RefreshCw,
+  Download, AlertTriangle, FlaskConical, Star,
 } from 'lucide-react';
 import api from '../../services/api.js';
 import StatCard from '../../components/StatCard.jsx';
@@ -96,9 +97,11 @@ function StorageCard({ title, icon: Icon, storage, onRefresh, loading, extraFoot
 export default function AdminDashboard() {
   const [d, setD] = useState(null);
   const [mongo, setMongo] = useState(null);
-  const [supabase, setSupabase] = useState(null);
+  const [b2, setB2] = useState(null);
+  const [downloads, setDownloads] = useState(null);
   const [loadingMongo, setLoadingMongo] = useState(false);
-  const [loadingSupabase, setLoadingSupabase] = useState(false);
+  const [loadingB2, setLoadingB2] = useState(false);
+  const [loadingDownloads, setLoadingDownloads] = useState(false);
   const [confirm, setConfirm] = useState(null);
   const [cleaning, setCleaning] = useState(false);
 
@@ -107,27 +110,36 @@ export default function AdminDashboard() {
     try {
       const r = await api.get('/admin/storage/stats');
       setMongo(r.data.data);
-    } catch (err) {
-      console.error(err);
+    } catch {
       toast.error('Failed to load MongoDB storage');
     } finally { setLoadingMongo(false); }
   }
 
-  async function loadSupabase() {
-    setLoadingSupabase(true);
+  async function loadB2() {
+    setLoadingB2(true);
     try {
-      const r = await api.get('/admin/storage/supabase-stats');
-      setSupabase(r.data.data);
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to load Supabase storage');
-    } finally { setLoadingSupabase(false); }
+      const r = await api.get('/admin/storage/b2-stats');
+      setB2(r.data.data);
+    } catch {
+      toast.error('Failed to load B2 storage');
+    } finally { setLoadingB2(false); }
+  }
+
+  async function loadDownloads() {
+    setLoadingDownloads(true);
+    try {
+      const r = await api.get('/admin/storage/download-stats');
+      setDownloads(r.data.data);
+    } catch {
+      toast.error('Failed to load download stats');
+    } finally { setLoadingDownloads(false); }
   }
 
   useEffect(() => {
     api.get('/dashboard/admin').then((r) => setD(r.data.data));
     loadMongo();
-    loadSupabase();
+    loadB2();
+    loadDownloads();
   }, []);
 
   async function doCleanup(target) {
@@ -148,17 +160,21 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Admin Overview</h1>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* Top stat cards — 5 columns */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         <StatCard icon={Users} label="Total Students" value={d.totalStudents} color="brand" />
         <StatCard icon={UserCheck} label="Total Faculty" value={d.totalFaculty} color="green" />
-        <StatCard icon={BookOpen} label="Total Subjects" value={d.totalSubjects} color="amber" />
-        <StatCard icon={Layers} label="Sections" value={d.totalSections} color="blue" />
+        <StatCard icon={BookOpen} label="Subjects" value={d.totalSubjects} color="amber" />
+        <StatCard icon={FlaskConical} label="Labs" value={d.totalLabs || 0} color="blue" />
+        <StatCard icon={Star} label="Activities" value={d.totalActivities || 0} color="purple" />
       </div>
 
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      {/* Year breakdown + sections */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <StatCard label="2nd Year" value={d.secondYear} color="brand" />
         <StatCard label="3rd Year" value={d.thirdYear} color="green" />
         <StatCard label="4th Year" value={d.fourthYear} color="amber" />
+        <StatCard icon={Layers} label="Sections" value={d.totalSections} color="blue" />
       </div>
 
       {/* Storage cards */}
@@ -183,31 +199,64 @@ export default function AdminDashboard() {
         />
 
         <StorageCard
-          title="Supabase Storage"
+          title="Backblaze B2 Storage"
           icon={Cloud}
-          storage={supabase}
-          loading={loadingSupabase}
-          onRefresh={loadSupabase}
+          storage={b2}
+          loading={loadingB2}
+          onRefresh={() => { loadB2(); loadDownloads(); }}
           extraFooter={
-            supabase?.buckets?.length > 0 ? (
-              <div className="text-xs text-slate-500 pt-2 border-t border-slate-100 space-y-1">
-                <p><b>{supabase.fileCount}</b> files across <b>{supabase.bucketCount}</b> bucket(s)</p>
-                {supabase.buckets.map((b) => (
-                  <div key={b.name} className="flex justify-between">
-                    <span className="truncate">📁 {b.name}</span>
-                    <span>{(b.totalBytes / (1024 * 1024)).toFixed(2)} MB</span>
+            <>
+              {b2?.buckets?.length > 0 && (
+                <div className="text-xs text-slate-500 pt-2 border-t border-slate-100 space-y-1">
+                  <p><b>{b2.fileCount}</b> files</p>
+                  {b2.buckets.map((b) => (
+                    <div key={b.name} className="flex justify-between">
+                      <span className="truncate">📁 {b.name}</span>
+                      <span>{(b.totalBytes / (1024 * 1024)).toFixed(2)} MB</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {downloads?.today && (
+                <div
+                  className={`mt-3 pt-3 border-t border-slate-100 rounded-lg p-3 ${
+                    downloads.today.warning
+                      ? 'bg-red-50 border border-red-200'
+                      : 'bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    {downloads.today.warning ? (
+                      <AlertTriangle size={16} className="text-red-600" />
+                    ) : (
+                      <Download size={16} className="text-slate-500" />
+                    )}
+                    <p className={`text-sm font-medium ${
+                      downloads.today.warning ? 'text-red-700' : 'text-slate-700'
+                    }`}>
+                      Today's Download Size: {downloads.today.mb} MB
+                    </p>
                   </div>
-                ))}
-              </div>
-            ) : null
+                  <p className={`text-xs mt-1 ${
+                    downloads.today.warning ? 'text-red-600' : 'text-slate-500'
+                  }`}>
+                    {downloads.today.count} download{downloads.today.count === 1 ? '' : 's'} today
+                    {downloads.today.warning
+                      ? ` — exceeds the ${downloads.today.warningThresholdMB} MB warning threshold.`
+                      : ` — below the ${downloads.today.warningThresholdMB} MB warning threshold.`}
+                  </p>
+                </div>
+              )}
+            </>
           }
         />
       </div>
 
-      {/* Database cleanup */}
+      {/* Database Cleanup */}
       <Card title="Database Cleanup">
         <p className="text-xs text-slate-500 mb-3">
-          Remove stale records to free MongoDB space. Does not affect Supabase Storage.
+          Remove stale records to free MongoDB space. Does not affect Backblaze B2.
         </p>
         <div className="grid md:grid-cols-2 gap-2">
           {CLEANUP_OPTIONS.map((opt) => (
@@ -222,7 +271,7 @@ export default function AdminDashboard() {
         </div>
       </Card>
 
-      {/* Recent activity */}
+      {/* Recent Activity */}
       <Card title="Recent Activity">
         <ul className="divide-y divide-slate-100 text-sm">
           {d.recentActivity.map((a) => (
@@ -235,6 +284,7 @@ export default function AdminDashboard() {
         </ul>
       </Card>
 
+      {/* Cleanup confirm modal */}
       <Modal open={!!confirm} onClose={() => setConfirm(null)} title="Confirm cleanup?">
         {confirm && (
           <div className="space-y-4">

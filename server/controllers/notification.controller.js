@@ -13,7 +13,18 @@ exports.unreadCount = async (req, res, next) => {
 exports.markRead = async (req, res, next) => {
   try { return success(res, await service.markRead(req.user.userId, req.params.id)); } catch (e) { next(e); }
 };
-
+exports.markTypeRead = async (req, res, next) => {
+  try {
+    const Notification = require('../models/Notification.model');
+    const type = req.body.type;
+    if (!type) return success(res, { modified: 0 });
+    const r = await Notification.updateMany(
+      { recipientId: req.user.userId, type, isRead: false },
+      { $set: { isRead: true } }
+    );
+    return success(res, { modified: r.modifiedCount });
+  } catch (e) { next(e); }
+};
 exports.markAllRead = async (req, res, next) => {
   try { return success(res, await service.markAllRead(req.user.userId)); } catch (e) { next(e); }
 };

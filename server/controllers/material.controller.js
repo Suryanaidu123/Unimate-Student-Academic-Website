@@ -1,4 +1,5 @@
 const service = require('../services/material.service');
+const downloadStats = require('../services/downloadStats.service');
 const { success } = require('../utils/apiResponse');
 const ApiError = require('../utils/ApiError');
 const storage = require('../utils/storage');
@@ -31,11 +32,19 @@ exports.download = async (req, res, next) => {
     const m = await service.getByIdForUser(req.params.id, req.user);
     const mode = req.query.mode === 'download' ? 'attachment' : 'inline';
     const url = await storage.getSignedDownloadUrl(m.fileKey, m.fileName, mode);
+
+    downloadStats.record({
+      materialId: m._id,
+      userId: req.user.userId,
+      role: req.user.role,
+      bytes: m.fileSize || 0,
+      mode,
+    });
+
     return res.redirect(url);
   } catch (e) { next(e); }
 };
 
-// Faculty-only helpers
 exports.mySemesters = async (req, res, next) => {
   try {
     if (req.user.role !== 'FACULTY') throw ApiError.forbidden();

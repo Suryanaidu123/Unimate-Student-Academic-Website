@@ -21,7 +21,24 @@ async function list({ q, status, page = 1, limit = 200 }) {
   ]);
   return { items, total, page, limit };
 }
+async function createStaffStub({ employeeId }, actor) {
+  const Staff = require('../models/Staff.model');
+  const emp = String(employeeId || '').trim();
+  if (!emp) throw ApiError.badRequest('Employee ID is required');
+  const dup = await Staff.findOne({ employeeId: emp });
+  if (dup) throw ApiError.conflict('An attendance staff with this Employee ID already exists');
+  const s = await Staff.create({ employeeId: emp, status: 'INACTIVE' });
+  await auditLog.log({
+    actor, action: 'STAFF_CREATE_STUB', entityType: 'Staff', entityId: s._id,
+    description: `Created attendance staff stub ${s.employeeId}`,
+  });
+  return s;
+}
 
+async function listStaff() {
+  const Staff = require('../models/Staff.model');
+  return Staff.find().sort({ employeeId: 1 });
+}
 async function getById(id) {
   const f = await Faculty.findById(id);
   if (!f) throw ApiError.notFound('Faculty not found');
@@ -100,4 +117,4 @@ async function remove(id, actor) {
   return { ok: true };
 }
 
-module.exports = { list, getById, create, update, setStatus, remove };
+module.exports = { list, getById, create, update, setStatus, remove, createStaffStub, listStaff };

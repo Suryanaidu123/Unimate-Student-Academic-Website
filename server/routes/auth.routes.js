@@ -48,7 +48,10 @@ router.post('/student/register', authLimiter, validate(studentRegisterSchema), c
 router.post('/student/login', authLimiter, validate(studentLoginSchema), ctrl.studentLogin);
 router.post('/faculty/login', authLimiter, validate(facultyLoginSchema), ctrl.facultyLogin);
 router.post('/admin/login', authLimiter, validate(adminLoginSchema), ctrl.adminLogin);
-
+//Staff login
+router.post('/staff/register/init', authLimiter, ctrl.initStaffRegister);
+router.post('/staff/register/verify', authLimiter, ctrl.verifyStaffRegister);
+router.post('/staff/login', authLimiter, ctrl.staffLogin);
 // ---- Session ----
 router.get('/me', requireAuth, ctrl.me);
 router.put('/change-password', requireAuth, validate(changePasswordSchema), ctrl.changePassword);

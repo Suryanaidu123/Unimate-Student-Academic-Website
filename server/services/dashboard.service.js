@@ -48,19 +48,29 @@ async function facultyDashboard(userId, facultyId) {
 async function adminDashboard() {
   const [
     totalStudents, secondYear, thirdYear, fourthYear,
-    totalFaculty, totalSubjects, totalBatches, totalSections,
+    totalFaculty, totalSubjects, totalLabs, totalActivities,
+    totalBatches, totalSections,
   ] = await Promise.all([
     Student.countDocuments(),
     Student.countDocuments({ year: 2 }),
     Student.countDocuments({ year: 3 }),
     Student.countDocuments({ year: 4 }),
     Faculty.countDocuments(),
-    Subject.countDocuments(),
+    Subject.countDocuments({ type: 'THEORY' }),
+    Subject.countDocuments({ type: 'LAB' }),
+    Subject.countDocuments({ type: 'ACTIVITY' }),
     require('../models/Batch.model').countDocuments(),
     require('../models/Section.model').countDocuments(),
   ]);
+
   const recentActivity = await AuditLog.find().sort({ createdAt: -1 }).limit(10).populate('actorUserId', 'email role');
-  return { totalStudents, secondYear, thirdYear, fourthYear, totalFaculty, totalSubjects, totalBatches, totalSections, recentActivity };
+
+  return {
+    totalStudents, secondYear, thirdYear, fourthYear,
+    totalFaculty, totalSubjects, totalLabs, totalActivities,
+    totalBatches, totalSections,
+    recentActivity,
+  };
 }
 
 module.exports = { studentDashboard, facultyDashboard, adminDashboard };

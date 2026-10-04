@@ -604,7 +604,116 @@ async function initFacultyPasswordReset({ employeeId, email }) {
     expiresInMinutes: env.OTP_TTL_MINUTES,
   };
 }
+async function loginStaff({ employeeId, password }) {
+  const Staff = require('../models/Staff.model');
+  const staff = await Staff.findOne({ employeeId });
+  if (!staff) throw ApiError.unauthorized('Invalid credentials');
 
+  const user = await User.findOne({ staffId: staff._id }).select('+passwordHash');
+  if (!user) throw ApiError.unauthorized('Invalid credentials');
+  if (user.status !== 'ACTIVE') throw ApiError.forbidden('Account is inactive');
+
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) throw ApiError.unauthorized('Invalid credentials');
+
+  user.lastLogin = new Date();
+  await user.save();
+
+  const accessToken = signAccess({ sub: user._id, role: user.role, staffId: staff._id });
+  return {
+    user: publicUser(user),
+    staff: { employeeId: staff.employeeId, name: staff.name, role: staff.role },
+    accessToken,
+  };
+}
+
+async function initStaffRegistration({ employeeId, name, email }) {
+  const Staff = require('../models/Staff.model');
+  const staff = await Staff.findOne({ employeeId });
+  if (!staff) throw ApiError.unprocessable('This Employee ID is not registered.');
+  if (staff.name) {
+    const existing = await User.findOne({ staffId: staff._id });
+    if (existing) throw ApiError.conflict('An account already exists for this Employee ID.');
+  }
+
+  const emailDup = await User.findOne({ email });
+  if (emailDup) throw ApiError.conflict('An account already exists with this email.');
+
+  await OtpRequest.updateMany(
+    { rollNumber: employeeId, consumed: false },
+    { $set: { consumed: true } }
+  );
+
+  const code = generateOtp();
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + env.OTP_TTL_MINUTES * 60 * 1000);
+
+  await OtpRequest.create({
+    rollNumber: employeeId,
+    email,
+    studentId: staff._id,   // reused as generic entityId
+    pendingName: JSON.stringify({ name }),
+    codeHash,
+    expiresAt,
+  });
+
+  const subject = 'UniMate — Verify your attendance staff account';
+  const text = `Hi ${name},\n\nYour UniMate verification code is: ${code}\n\nThis code expires in ${env.OTP_TTL_MINUTES} minutes.\n\n— UniMate`;
+  const html = `<p>Your code: <b style="font-size:24px">${code}</b></p>`;
+  try { await sendMail({ to: email, subject, text, html }); }
+  catch (e) { throw ApiError.badRequest('Could not send verification email.'); }
+
+  return { sentTo: email.replace(/(.{2}).+(@.*)/, '$1***$2'), expiresInMinutes: env.OTP_TTL_MINUTES };
+}
+
+async function verifyStaffRegistration({ employeeId, code, password }) {
+  const Staff = require('../models/Staff.model');
+  const req = await OtpRequest
+    .findOne({ rollNumber: employeeId, consumed: false })
+    .sort({ createdAt: -1 })
+    .select('+codeHash');
+
+  if (!req) throw ApiError.unprocessable('No pending verification.');
+  if (req.expiresAt < new Date()) throw ApiError.unprocessable('Code expired.');
+  if (req.attempts >= env.OTP_MAX_ATTEMPTS) throw ApiError.forbidden('Too many attempts.');
+
+  const ok = await bcrypt.compare(code, req.codeHash);
+  if (!ok) {
+    req.attempts += 1;
+    await req.save();
+    throw ApiError.unprocessable(`Incorrect code. ${Math.max(0, env.OTP_MAX_ATTEMPTS - req.attempts)} left.`);
+  }
+
+  const staff = await Staff.findById(req.studentId);
+  if (!staff) throw ApiError.notFound('Staff record missing.');
+
+  const meta = req.pendingName ? JSON.parse(req.pendingName) : {};
+
+  staff.name = meta.name || staff.name || '';
+  staff.email = req.email;
+  staff.status = 'ACTIVE';
+  await staff.save();
+
+  const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const user = await User.create({
+    email: staff.email,
+    passwordHash,
+    role: 'ATTENDANCE_STAFF',
+    staffId: staff._id,
+    status: 'ACTIVE',
+  });
+
+  req.consumed = true;
+  await req.save();
+
+  const accessToken = signAccess({ sub: user._id, role: user.role, staffId: staff._id });
+
+  return {
+    user: publicUser(user),
+    staff: { employeeId: staff.employeeId, name: staff.name, email: staff.email },
+    accessToken,
+  };
+}
 async function verifyFacultyPasswordReset({ employeeId, code, newPassword }) {
   const req = await OtpRequest
     .findOne({ rollNumber: employeeId, consumed: false, pendingName: '__FACULTY_RESET__' })
@@ -709,20 +818,31 @@ async function verifyAdminPasswordReset({ email, code, newPassword }) {
   return { ok: true };
 }
 module.exports = {
+  // Student
   registerStudent,
   initStudentRegistration,
   verifyStudentRegistration,
   initStudentPasswordReset,
-  initAdminPasswordReset,
-  verifyAdminPasswordReset,
-  initFacultyPasswordReset,
-  verifyFacultyPasswordReset,
+  verifyStudentPasswordReset,
+
+  // Faculty
   initFacultyRegistration,
   verifyFacultyRegistration,
-  verifyStudentPasswordReset,
+  initFacultyPasswordReset,
   verifyFacultyPasswordReset,
-  loginEmailPassword,
   loginFaculty,
+
+  // Staff (attendance staff)
+  loginStaff,
+  initStaffRegistration,
+  verifyStaffRegistration,
+
+  // Admin
+  initAdminPasswordReset,
+  verifyAdminPasswordReset,
+
+  // Shared
+  loginEmailPassword,
   me,
   changePassword,
 };
