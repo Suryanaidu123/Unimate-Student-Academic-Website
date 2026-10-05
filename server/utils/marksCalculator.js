@@ -11,7 +11,7 @@ function computeMid(written, online, assignment) {
   const w = clamp(written, 0, WRITTEN_MAX);
   const o = clamp(online, 0, ONLINE_MAX);
   const a = clamp(assignment, 0, ASSIGNMENT_MAX);
-  const writtenConverted = w / WRITTEN_DIVISOR;
+  const writtenConverted = Math.ceil(w / WRITTEN_DIVISOR);
   const total = writtenConverted + o + a;
   return { written: w, writtenConverted, online: o, assignment: a, total };
 }

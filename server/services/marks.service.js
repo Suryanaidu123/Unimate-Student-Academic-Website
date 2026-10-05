@@ -258,7 +258,131 @@ async function remove(id, actor) {
   return { ok: true };
 }
 
+async function unpublish(id, actor) {
+  const m = await Marks.findById(id).populate('subjectId');
+  if (!m) throw ApiError.notFound('Marks not found');
+  if (m.status === 'LOCKED') throw ApiError.forbidden('Locked marks cannot be unpublished. Contact admin.');
+  if (m.status !== 'PUBLISHED') throw ApiError.badRequest('Marks are not published.');
+
+  if (actor.role === 'FACULTY') {
+    const subject = m.subjectId;
+    if (!subject || String(subject.facultyId) !== String(actor.facultyId)) {
+      throw ApiError.forbidden('You are not assigned to this subject.');
+    }
+  }
+
+  m.status = 'DRAFT';
+  m.publishedAt = null;
+  m.updatedBy = actor?.userId;
+  await m.save();
+
+  await auditLog.log({
+    actor, action: 'MARKS_UNPUBLISH', entityType: 'Marks', entityId: m._id,
+    description: `Marks unpublished for subject ${m.subjectId?.subjectCode || ''}`,
+  });
+  return m;
+}
+
+/**
+ * importPreview — parse an uploaded file and match roll numbers against
+ * students in the selected class.  Returns a preview rows array but does NOT
+ * write anything to the database.
+ *
+ * @param {Buffer}  fileBuffer      Raw file bytes from multer memoryStorage
+ * @param {string}  originalName    File name (used to detect extension)
+ * @param {object}  opts            { subjectId, year, section, midKey }
+ * @param {object}  actor           req.user
+ * @returns {{ rows, matched, unmatched, fileRows }}
+ */
+async function importPreview(fileBuffer, originalName, { subjectId, year, section, midKey }, actor) {
+  const { parseMarksFile } = require('../utils/marksImportParser');
+
+  // 1. Authorisation — faculty must own the subject
+  const subject = await assertFacultyCanEditSubject(actor, subjectId);
+
+  // 2. Parse the file into raw rows
+  const fileRows = await parseMarksFile(fileBuffer, originalName);
+
+  // 3. Load all students for the selected year + section
+  const students = await Student.find({
+    year: Number(year),
+    section: String(section).toUpperCase(),
+  }).select('rollNumber name year _id');
+
+  // Build a lookup map: rollNumber (uppercase) → student doc
+  const studentMap = new Map(students.map((s) => [String(s.rollNumber).toUpperCase(), s]));
+
+  // 4. Validate the midKey
+  const validMidKeys = ['mid1', 'mid2'];
+  if (!validMidKeys.includes(midKey)) {
+    throw ApiError.badRequest('midKey must be "mid1" or "mid2".');
+  }
+
+  // 5. Build preview rows
+  const WRITTEN_MAX    = 30;
+  const ONLINE_MAX     = 10;
+  const ASSIGNMENT_MAX = 5;
+
+  const seenRolls = new Set();
+  const rows = fileRows.map((fr) => {
+    const roll = String(fr.rollNumber || '').toUpperCase();
+    const student = studentMap.get(roll);
+
+    const rowErrors = [];
+
+    // Duplicate roll number in the uploaded file
+    if (seenRolls.has(roll)) rowErrors.push('Duplicate roll number in file');
+    seenRolls.add(roll);
+
+    // Student not found in the selected class
+    if (!student) {
+      rowErrors.push(`Roll number ${roll} not found in Year ${year} Section ${section}`);
+    }
+
+    // Missing marks
+    if (fr.written === null)    rowErrors.push('Missing Written marks');
+    if (fr.online === null)     rowErrors.push('Missing Online marks');
+    if (fr.assignment === null) rowErrors.push('Missing Assignment marks');
+
+    // Range validation
+    if (fr.written    !== null && (fr.written    < 0 || fr.written    > WRITTEN_MAX))    rowErrors.push(`Written must be 0–${WRITTEN_MAX} (got ${fr.written})`);
+    if (fr.online     !== null && (fr.online     < 0 || fr.online     > ONLINE_MAX))     rowErrors.push(`Online must be 0–${ONLINE_MAX} (got ${fr.online})`);
+    if (fr.assignment !== null && (fr.assignment < 0 || fr.assignment > ASSIGNMENT_MAX)) rowErrors.push(`Assignment must be 0–${ASSIGNMENT_MAX} (got ${fr.assignment})`);
+
+    // Year mismatch (student found but wrong year — shouldn't happen with proper filter, safety net)
+    if (student && student.year !== Number(year)) {
+      rowErrors.push(`Student belongs to Year ${student.year}, not Year ${year}`);
+    }
+
+    const status = rowErrors.length > 0 ? 'ERROR' : 'MATCHED';
+
+    return {
+      rollNumber:   roll,
+      name:         student?.name || null,
+      studentId:    student?._id  || null,
+      written:      fr.written,
+      online:       fr.online,
+      assignment:   fr.assignment,
+      status,
+      errors:       rowErrors,
+    };
+  });
+
+  const matched   = rows.filter((r) => r.status === 'MATCHED').length;
+  const unmatched = rows.length - matched;
+
+  return {
+    subjectName: subject.subjectName,
+    subjectCode: subject.subjectCode,
+    midKey,
+    totalInFile: fileRows.length,
+    matched,
+    unmatched,
+    rows,
+  };
+}
+
 module.exports = {
-  upsertMarks, bulkUpsertMarks, listForFaculty, listMy, getById,
-  publish, lock, unlock, remove,
+  upsertMarks, bulkUpsertMarks, importPreview, listForFaculty, listMy, getById,
+  publish, unpublish, lock, unlock, remove,
 };

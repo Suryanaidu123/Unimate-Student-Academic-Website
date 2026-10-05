@@ -72,15 +72,54 @@ exports.publish = async (req, res, next) => {
   try { return success(res, await service.publish(req.params.id, req.user), 'Marks published'); }
   catch (e) { next(e); }
 };
+
+exports.unpublish = async (req, res, next) => {
+  try { return success(res, await service.unpublish(req.params.id, req.user), 'Marks unpublished'); }
+  catch (e) { next(e); }
+};
+
 exports.lock = async (req, res, next) => {
   try { return success(res, await service.lock(req.params.id, req.user), 'Marks locked'); }
   catch (e) { next(e); }
 };
+
 exports.unlock = async (req, res, next) => {
   try { return success(res, await service.unlock(req.params.id, req.user), 'Marks unlocked'); }
   catch (e) { next(e); }
 };
+
 exports.remove = async (req, res, next) => {
   try { return success(res, await service.remove(req.params.id, req.user), 'Marks deleted'); }
   catch (e) { next(e); }
+};
+
+/**
+ * POST /marks/import-preview
+ * Accepts a multipart/form-data request with:
+ *   - file       : the Excel / CSV / PDF upload
+ *   - subjectId  : string
+ *   - year       : number string
+ *   - section    : string
+ *   - midKey     : "mid1" | "mid2"
+ *
+ * Returns a preview object — nothing is written to the DB.
+ * The client calls POST /marks/bulk after the faculty confirms.
+ */
+exports.importPreview = async (req, res, next) => {
+  try {
+    if (!req.file) throw ApiError.badRequest('No file uploaded.');
+    const { subjectId, year, section, midKey } = req.body;
+    if (!subjectId) throw ApiError.badRequest('subjectId is required.');
+    if (!year)      throw ApiError.badRequest('year is required.');
+    if (!section)   throw ApiError.badRequest('section is required.');
+    if (!midKey)    throw ApiError.badRequest('midKey is required (mid1 or mid2).');
+
+    const data = await service.importPreview(
+      req.file.buffer,
+      req.file.originalname,
+      { subjectId, year, section, midKey },
+      req.user
+    );
+    return success(res, data, 'Preview ready');
+  } catch (e) { next(e); }
 };
