@@ -1,10 +1,8 @@
-import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { GraduationCap, BookOpen, BarChart3, Bell, ShieldCheck, Users } from 'lucide-react';
 
 export default function Landing() {
   const navigate = useNavigate();
-  const [copClicks, setCopClicks] = useState(0);
 
   // Triple-click on "© YEAR UniMate" → Admin login
   function handleAdminSecret() {
@@ -17,19 +15,6 @@ export default function Landing() {
       return;
     }
     window.__adminTimer = setTimeout(() => { window[key] = 0; }, 800);
-  }
-
-  // Triple-click on "Better Academic Life" → COP login
-  function handleCopSecret() {
-    const next = copClicks + 1;
-    if (next >= 3) {
-      setCopClicks(0);
-      navigate('/auth/attendance/login');
-      return;
-    }
-    setCopClicks(next);
-    clearTimeout(window.__copTimer);
-    window.__copTimer = setTimeout(() => setCopClicks(0), 800);
   }
 
   const features = [
@@ -58,7 +43,6 @@ export default function Landing() {
           One Platform. <span className="text-brand-600">Smarter Study.</span>
           <br />
           <span
-            onClick={handleCopSecret}
             className="cursor-default select-none"
             title=""
           >

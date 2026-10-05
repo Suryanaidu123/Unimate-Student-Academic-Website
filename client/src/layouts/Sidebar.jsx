@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ClipboardList, GraduationCap, FileText,
-  Calendar, CalendarDays, Bell, User, Users, ScrollText, MessageSquare, X,
-  ClipboardCheck, ListChecks, Cloud, History,
+  CalendarDays, Bell, User, Users, ScrollText, MessageSquare, X,
+  History,
 } from 'lucide-react';
 import { useBadges } from '../context/BadgeContext.jsx';
 import api from '../services/api.js';
@@ -12,7 +12,6 @@ const ROUTE_BADGE = {
   '/student/exams': 'exams',
   '/student/materials': 'materials',
   '/student/assignments': 'assignments',
-  '/student/timetable': 'timetable',
   '/student/marks': 'marks',
   '/student/notifications': 'notifications',
 };
@@ -23,7 +22,6 @@ const links = {
 
     // Academics
     { to: '/student/subjects', label: 'Subjects', icon: BookOpen },
-    { to: '/student/timetable', label: 'Timetable', icon: Calendar },
     { to: '/student/exams', label: 'Exams', icon: CalendarDays },
     { to: '/student/marks', label: 'Marks', icon: GraduationCap },
 
@@ -46,7 +44,6 @@ const links = {
 
     // Academics
     { to: '/faculty/subjects', label: 'My Subjects', icon: BookOpen },
-    { to: '/faculty/timetable', label: 'Timetable', icon: Calendar },
     { to: '/faculty/exams', label: 'Exams', icon: CalendarDays },
     { to: '/faculty/marks', label: 'Marks', icon: GraduationCap },
 
@@ -58,13 +55,6 @@ const links = {
     { to: '/faculty/feedback', label: 'Feedback', icon: MessageSquare },
   ],
 
-  ATTENDANCE_STAFF: [
-    { to: '/attendance/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/attendance/mark', label: 'Mark Attendance', icon: ClipboardCheck },
-    { to: '/attendance/summary', label: 'Year Summary', icon: Users },
-    { to: '/attendance/sessions', label: 'Sessions', icon: ListChecks },
-  ],
-
   ADMIN: [
     { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
 
@@ -72,12 +62,10 @@ const links = {
     { to: '/admin/students', label: 'Students', icon: Users },
     { to: '/admin/bulk-students', label: 'Bulk Add Students', icon: Users },
     { to: '/admin/faculty', label: 'Faculty', icon: User },
-    { to: '/admin/attendance-staff', label: 'Attendance Staff', icon: ClipboardCheck },
 
     // Academics
     { to: '/admin/semesters', label: 'Semesters', icon: GraduationCap },
     { to: '/admin/subjects', label: 'Subjects & Labs', icon: BookOpen },
-    { to: '/admin/timetable', label: 'Timetable', icon: Calendar },
     { to: '/admin/exams', label: 'Exams', icon: CalendarDays },
     { to: '/admin/marks', label: 'Marks', icon: GraduationCap },
 
@@ -90,7 +78,6 @@ const links = {
     { to: '/admin/feedback', label: 'Feedback', icon: MessageSquare, badge: 'feedback' },
 
     // System
-    { to: '/admin/attendance-settings', label: 'Attendance Settings', icon: Cloud },
     { to: '/admin/audit-logs', label: 'Audit Logs', icon: ScrollText },
   ],
 };
@@ -150,7 +137,7 @@ export default function Sidebar({ role, open = false, onClose }) {
             <GraduationCap /> UniMate
           </div>
           <p className="text-xs text-slate-500 mt-1">
-            {role === 'ATTENDANCE_STAFF' ? 'COP Portal' : `${role.toLowerCase()} portal`}
+            {`${role.toLowerCase()} portal`}
           </p>
         </div>
         {onClose && (

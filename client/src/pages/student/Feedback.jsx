@@ -11,7 +11,6 @@ const CATEGORIES = [
   'General',
   'Academics',
   'Faculty',
-  'Timetable',
   'Facilities',
   'Examination',
   'Suggestions',

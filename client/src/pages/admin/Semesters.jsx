@@ -225,7 +225,7 @@ export default function AdminSemesters() {
               </Button>
 
               <p className="text-xs text-slate-500 mt-2">
-                Configuring subjects, faculty, timetable, marks for this semester.
+                Configuring subjects, faculty, marks for this semester.
               </p>
             </div>
           );
@@ -338,7 +338,7 @@ export default function AdminSemesters() {
             )}
 
             <p className="text-xs text-slate-500">
-              Student personal details stay the same. Subjects, faculty, timetable and marks
+              Student personal details stay the same. Subjects, faculty and marks
               will load from the destination semester's configuration automatically.
             </p>
 

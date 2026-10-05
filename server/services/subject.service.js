@@ -202,18 +202,15 @@ async function remove(id, actor) {
   if (!s) throw ApiError.notFound('Subject not found');
 
   const Marks = require('../models/Marks.model');
-  const Timetable = require('../models/Timetable.model');
   const Material = require('../models/Material.model');
 
-  const [marksCount, ttCount, matCount] = await Promise.all([
+  const [marksCount, matCount] = await Promise.all([
     Marks.countDocuments({ subjectId: id }),
-    Timetable.countDocuments({ subjectId: id }),
     Material.countDocuments({ subjectId: id }),
   ]);
 
   const blockers = [];
   if (marksCount > 0) blockers.push(`${marksCount} marks record(s)`);
-  if (ttCount > 0) blockers.push(`${ttCount} timetable slot(s)`);
   if (matCount > 0) blockers.push(`${matCount} material(s)`);
 
   if (blockers.length) {

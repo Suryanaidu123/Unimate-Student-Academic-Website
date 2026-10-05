@@ -306,7 +306,7 @@ export default function AdminSubjects() {
       >
         <p className="text-xs text-slate-500 mb-3">
           Activities like Skilling Practice, NPTEL, etc. These do <b>not</b> count as
-          Subjects or Labs, but they can be placed in the timetable.
+          Subjects or Labs.
         </p>
         {loading ? (
           <p className="text-sm text-slate-500 py-6 text-center">Loading…</p>
@@ -366,8 +366,7 @@ export default function AdminSubjects() {
           />
 
           <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded p-2">
-            Tip: put the short alias in parentheses — e.g. <b>Deep Learning (DL)</b>. Only{' '}
-            <b>DL</b> will show inside the timetable cell.
+            Tip: put the short alias in parentheses — e.g. <b>Deep Learning (DL)</b>.
           </p>
 
           {form.type === 'THEORY' && (
@@ -427,7 +426,7 @@ export default function AdminSubjects() {
               Delete <b>{confirmRow.subjectName}</b>?
             </p>
             <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg p-3">
-              This cannot be undone. If the item is used in marks, timetable, or materials,
+              This cannot be undone. If the item is used in marks or materials,
               deletion is blocked.
             </div>
             <div className="flex justify-end gap-2">

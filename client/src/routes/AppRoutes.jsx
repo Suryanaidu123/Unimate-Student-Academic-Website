@@ -2,12 +2,6 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Landing from '../pages/Landing.jsx';
 import NotFound from '../pages/NotFound.jsx';
 import Unauthorized from '../pages/Unauthorized.jsx';
-import AttendanceLogin from '../pages/auth/AttendanceLogin.jsx';
-import AttendanceDashboard from '../pages/attendance/Dashboard.jsx';
-import MarkAttendance from '../pages/attendance/MarkAttendance.jsx';
-import AttendanceSessions from '../pages/attendance/Sessions.jsx';
-import StudentAttendance from '../pages/student/Attendance.jsx';
-// Auth pages
 
 import AdminMaterialsHistory from '../pages/admin/MaterialsHistory.jsx';
 
@@ -26,14 +20,13 @@ import AdminForgotPassword from '../pages/auth/AdminForgotPassword.jsx';
 import AdminFeedback from '../pages/admin/Feedback.jsx';
 
 import DashboardLayout from '../layouts/DashboardLayout.jsx';
-import AttendanceRegister from '../pages/auth/AttendanceRegister.jsx';
+
 // Student pages
 import StudentDashboard from '../pages/student/Dashboard.jsx';
 import StudentSubjects from '../pages/student/Subjects.jsx';
 import StudentMarks from '../pages/student/Marks.jsx';
 import StudentAssignments from '../pages/student/Assignments.jsx';
 import StudentNotes from '../pages/student/Notes.jsx';
-import StudentTimetable from '../pages/student/Timetable.jsx';
 import StudentExams from '../pages/student/Exams.jsx';
 import StudentMaterials from '../pages/student/Materials.jsx';
 import StudentNotifications from '../pages/student/Notifications.jsx';
@@ -44,13 +37,11 @@ import StudentContactAdmin from '../pages/student/ContactAdmin.jsx';
 import FacultyDashboard from '../pages/faculty/Dashboard.jsx';
 import FacultySubjects from '../pages/faculty/Subjects.jsx';
 import FacultyMarks from '../pages/faculty/Marks.jsx';
-import FacultyTimetable from '../pages/faculty/Timetable.jsx';
 import FacultyExams from '../pages/faculty/Exams.jsx';
 import FacultyMaterials from '../pages/faculty/Materials.jsx';
 import FacultyNotifications from '../pages/faculty/Notifications.jsx';
 
 // Admin pages
-import AdminAttendanceStaff from '../pages/admin/AttendanceStaff.jsx';
 import AdminDashboard from '../pages/admin/Dashboard.jsx';
 import AdminStudents from '../pages/admin/Students.jsx';
 import AdminBulkStudents from '../pages/admin/BulkStudents.jsx';
@@ -58,27 +49,24 @@ import AdminFaculty from '../pages/admin/Faculty.jsx';
 import AdminSemesters from '../pages/admin/Semesters.jsx';
 import AdminSubjects from '../pages/admin/Subjects.jsx';
 import AdminMarks from '../pages/admin/Marks.jsx';
-import AdminTimetable from '../pages/admin/Timetable.jsx';
 import AdminExams from '../pages/admin/Exams.jsx';
 import AdminMaterials from '../pages/admin/Materials.jsx';
 import AdminNotifications from '../pages/admin/Notifications.jsx';
 import AdminMessages from '../pages/admin/Messages.jsx';
 import AdminAuditLogs from '../pages/admin/AuditLogs.jsx';
-import YearSummary from '../pages/attendance/YearSummary.jsx';
 import ProtectedRoute from './ProtectedRoute.jsx';
-import AdminAttendanceSettings from '../pages/admin/AttendanceSettings.jsx';
+
 export default function AppRoutes() {
   return (
     <Routes>
       {/* ============ PUBLIC ROUTES ============ */}
       <Route path="/" element={<Landing />} />
-      <Route path="/auth/attendance/login" element={<AttendanceLogin />} />
-      <Route path="/auth/attendance/register" element={<AttendanceRegister />} />
+
       {/* Student auth */}
       <Route path="/auth/student/login" element={<StudentLogin />} />
       <Route path="/auth/student/register" element={<StudentRegister />} />
       <Route path="/auth/student/forgot-password" element={<StudentForgotPassword />} />
-      <Route path="attendance" element={<StudentAttendance />} />
+
       {/* Faculty auth */}
       <Route path="/auth/faculty/login" element={<FacultyLogin />} />
       <Route path="/auth/faculty/register" element={<FacultyRegister />} />
@@ -106,7 +94,6 @@ export default function AppRoutes() {
         <Route path="marks" element={<StudentMarks />} />
         <Route path="assignments" element={<StudentAssignments />} />
         <Route path="notes" element={<StudentNotes />} />
-        <Route path="timetable" element={<StudentTimetable />} />
         <Route path="exams" element={<StudentExams />} />
         <Route path="materials" element={<StudentMaterials />} />
         <Route path="notifications" element={<StudentNotifications />} />
@@ -128,7 +115,6 @@ export default function AppRoutes() {
         <Route path="subjects" element={<FacultySubjects />} />
         <Route path="feedback" element={<FacultyFeedback />} />
         <Route path="marks" element={<FacultyMarks />} />
-        <Route path="timetable" element={<FacultyTimetable />} />
         <Route path="exams" element={<FacultyExams />} />
         <Route path="materials" element={<FacultyMaterials />} />
         <Route path="notifications" element={<FacultyNotifications />} />
@@ -147,34 +133,18 @@ export default function AppRoutes() {
         <Route path="dashboard" element={<AdminDashboard />} />
         <Route path="students" element={<AdminStudents />} />
         <Route path="bulk-students" element={<AdminBulkStudents />} />
-        <Route path="attendance-settings" element={<AdminAttendanceSettings />} />
         <Route path="materials-history" element={<AdminMaterialsHistory />} />
         <Route path="faculty" element={<AdminFaculty />} />
         <Route path="feedback" element={<AdminFeedback />} />
         <Route path="semesters" element={<AdminSemesters />} />
         <Route path="subjects" element={<AdminSubjects />} />
         <Route path="marks" element={<AdminMarks />} />
-        <Route path="timetable" element={<AdminTimetable />} />
         <Route path="exams" element={<AdminExams />} />
         <Route path="materials" element={<AdminMaterials />} />
-        <Route path="attendance-staff" element={<AdminAttendanceStaff />} />
         <Route path="notifications" element={<AdminNotifications />} />
         <Route path="messages" element={<AdminMessages />} />
         <Route path="audit-logs" element={<AdminAuditLogs />} />
       </Route>
-
-
-      <Route path="/attendance" element={
-  <ProtectedRoute roles={['ATTENDANCE_STAFF']}>
-    <DashboardLayout role="ATTENDANCE_STAFF" />
-  </ProtectedRoute>
-}>
-  <Route index element={<Navigate to="dashboard" replace />} />
-  <Route path="dashboard" element={<AttendanceDashboard />} />
-  <Route path="mark" element={<MarkAttendance />} />
-  <Route path="summary" element={<YearSummary />} />
-  <Route path="sessions" element={<AttendanceSessions />} />
-</Route>
 
       {/* ============ 404 ============ */}
       <Route path="*" element={<NotFound />} />

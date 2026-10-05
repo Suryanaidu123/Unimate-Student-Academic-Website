@@ -17,7 +17,6 @@ const TYPE_VARIANTS = {
   MARKS_PUBLISHED: 'success',
   EXAM_SCHEDULED: 'info',
   EXAM_APPROACHING: 'warning',
-  TIMETABLE_UPDATED: 'info',
   NEW_NOTES_PUBLISHED: 'brand',
   ACADEMIC_ALERT: 'warning',
   SYSTEM_ALERT: 'default',

@@ -51,26 +51,6 @@ exports.me = async (req, res, next) => {
     return success(res, data);
   } catch (e) { next(e); }
 };
-exports.staffLogin = async (req, res, next) => {
-  try {
-    const data = await authService.loginStaff(req.body);
-    return success(res, data, 'Logged in successfully');
-  } catch (e) { next(e); }
-};
-
-exports.initStaffRegister = async (req, res, next) => {
-  try {
-    const data = await authService.initStaffRegistration(req.body);
-    return success(res, data, 'Verification code sent.');
-  } catch (e) { next(e); }
-};
-
-exports.verifyStaffRegister = async (req, res, next) => {
-  try {
-    const data = await authService.verifyStaffRegistration(req.body);
-    return success(res, data, 'Account created successfully.', 201);
-  } catch (e) { next(e); }
-};
 exports.initStudentRegister = async (req, res, next) => {
   try {
     const data = await authService.initStudentRegistration(req.body);

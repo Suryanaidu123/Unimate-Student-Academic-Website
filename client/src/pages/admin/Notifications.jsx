@@ -13,7 +13,6 @@ const TYPES = [
   { value: 'ACADEMIC_ALERT',         label: 'Academic Alert' },
   { value: 'EXAM_SCHEDULED',         label: 'Exam Scheduled' },
   { value: 'EXAM_APPROACHING',       label: 'Exam Approaching' },
-  { value: 'TIMETABLE_UPDATED',      label: 'Timetable Updated' },
   { value: 'NEW_NOTES_PUBLISHED',    label: 'New Notes Published' },
   { value: 'SYSTEM_ALERT',           label: 'System Alert' },
 ];
