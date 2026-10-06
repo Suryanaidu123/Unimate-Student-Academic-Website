@@ -25,3 +25,12 @@ exports.remove = async (req, res, next) => {
   try { return success(res, await service.remove(req.params.id, req.user)); }
   catch (e) { next(e); }
 };
+
+// DELETE /subjects/cleanup/activities — removes all ACTIVITY-type subject records
+exports.cleanupActivities = async (req, res, next) => {
+  try {
+    const Subject = require('../models/Subject.model');
+    const result  = await Subject.deleteMany({ type: 'ACTIVITY' });
+    return success(res, { deleted: result.deletedCount }, `Removed ${result.deletedCount} activity subject(s)`);
+  } catch (e) { next(e); }
+};

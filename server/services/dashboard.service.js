@@ -10,21 +10,22 @@ const AuditLog = require('../models/AuditLog.model');
 
 async function studentDashboard(userId, studentId) {
   const student = await Student.findById(studentId);
-  const subjects = await Subject.find({ year: student.year }).populate('facultyId', 'name');
+  const subjects = await Subject.find({ year: student.year, type: 'THEORY' }).populate('facultyId', 'name');
+  const labs = await Subject.find({ year: student.year, type: 'LAB' }).lean();
   const marks = await Marks.find({ studentId, status: { $in: ['PUBLISHED', 'LOCKED'] } }).populate('subjectId', 'subjectName subjectCode');
-  const assignments = await Assignment.find({ section: student.section, status: 'PUBLISHED', dueDate: { $gte: new Date() } })
+  const assignments = await Assignment.find({ status: 'PUBLISHED', dueDate: { $gte: new Date() } })
     .populate('subjectId', 'subjectName').sort({ dueDate: 1 }).limit(5);
-  const exams = await Exam.find({ year: student.year, section: student.section, date: { $gte: new Date() } })
+  const exams = await Exam.find({ year: student.year, date: { $gte: new Date() } })
     .populate('subjectId', 'subjectName').sort({ date: 1 }).limit(5);
   const unread = await Notification.countDocuments({ recipientId: userId, isRead: false });
-  const recentNotes = await Note.find({ status: 'PUBLISHED' }).populate('subjectId', 'subjectName').sort({ publishedAt: -1 }).limit(5);
 
-  return { student, subjects, marks, assignments, exams, unread, recentNotes };
+  return { student, subjects, labs, marks, assignments, exams, unread };
 }
 
 async function facultyDashboard(userId, facultyId) {
   const faculty = await Faculty.findById(facultyId);
-  const subjects = await Subject.find({ facultyId });
+  // Only show THEORY subjects assigned to this faculty — labs are never faculty-assigned
+  const subjects = await Subject.find({ facultyId, type: { $ne: 'LAB' } });
 
   // Unique years this faculty teaches
   const years = [...new Set(subjects.map((s) => s.year))].sort((a, b) => a - b);

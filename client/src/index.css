@@ -14,3 +14,14 @@ body { font-family: 'Inter', system-ui, sans-serif; background: #f8fafc; color: 
   .input { @apply w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent; }
   .label { @apply block text-sm font-medium text-slate-700 mb-1; }
 }
+
+/* ── Announcement ticker animation ──────────────────────────────────────────
+   Text starts at 50% (center of ticker area) and exits to the left (-120%).
+   `forwards` keeps the text off-screen after it exits so there's no flash.
+   A new animation is triggered each time the `key` prop changes.          */
+@keyframes ticker-center-out {
+  0%   { transform: translateX(50%);    opacity: 1; }
+  8%   { transform: translateX(40%);    opacity: 1; }
+  85%  { transform: translateX(-110%);  opacity: 1; }
+  100% { transform: translateX(-120%);  opacity: 0; }
+}

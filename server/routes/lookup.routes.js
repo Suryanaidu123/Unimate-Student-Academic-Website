@@ -46,6 +46,7 @@ router.get('/subjects', requireRole('FACULTY', 'ADMIN'), async (req, res, next) 
 
     if (req.user.role === 'FACULTY') {
       q.facultyId = req.user.facultyId;
+      q.type      = { $ne: 'LAB' }; // labs are never faculty-assigned
     }
 
     const subjects = await Subject.find(q)

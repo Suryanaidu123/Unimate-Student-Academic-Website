@@ -133,7 +133,8 @@ async function create(data, actor) {
     status: data.status || 'ACTIVE',
   };
   if (isValidObjectId(data.semesterId)) payload.semesterId = data.semesterId;
-  if (isValidObjectId(data.facultyId)) payload.facultyId = data.facultyId;
+  // Labs must never have a faculty assignment
+  if (type !== 'LAB' && isValidObjectId(data.facultyId)) payload.facultyId = data.facultyId;
 
   const dup = await Subject.findOne({ subjectCode: payload.subjectCode });
   if (dup) throw ApiError.conflict('Subject code already exists');
@@ -173,6 +174,7 @@ async function update(id, data, actor) {
   if (data.description !== undefined) patch.description = data.description;
 
   if (data.facultyId !== undefined) {
+    // Labs must never have a faculty assignment
     if (actor?.role === 'FACULTY') {
       if (data.facultyId && String(data.facultyId) !== String(actor.facultyId)) {
         throw ApiError.forbidden('You cannot reassign this subject to another faculty.');
@@ -180,7 +182,10 @@ async function update(id, data, actor) {
     } else if (data.facultyId === null || data.facultyId === '') {
       patch.facultyId = null;
     } else if (isValidObjectId(data.facultyId)) {
-      patch.facultyId = data.facultyId;
+      // Silently ignore facultyId for LAB type
+      if (old.type !== 'LAB') {
+        patch.facultyId = data.facultyId;
+      }
     } else {
       throw ApiError.badRequest('Invalid facultyId');
     }

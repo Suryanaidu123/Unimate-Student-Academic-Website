@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, useNavigate, Link } from 'react-router-dom';
-import { Bell, LogOut, Menu } from 'lucide-react';
+import { Bell, LogOut, Menu, User } from 'lucide-react';
 import Sidebar from './Sidebar.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useNotifications } from '../context/NotificationContext.jsx';
@@ -20,25 +20,20 @@ export default function DashboardLayout({ role }) {
   }
 
   const notifBase =
-    role === 'STUDENT'
-      ? '/student/notifications'
-      : role === 'FACULTY'
-      ? '/faculty/notifications'
-      : '/admin/notifications';
+    role === 'STUDENT'  ? '/student/notifications'  :
+    role === 'FACULTY'  ? '/faculty/notifications'  :
+                          '/admin/notifications';
 
   const activeSem = SEMESTER_KEYS.find((s) => s.year === year && s.semester === semester);
 
   return (
     <div className="h-screen flex bg-slate-50 overflow-hidden">
-      {/* Single Sidebar instance — handles desktop (always visible) AND mobile drawer */}
-      <Sidebar
-        role={role}
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
+      <Sidebar role={role} open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="h-14 sm:h-16 shrink-0 bg-white border-b border-slate-200 flex items-center justify-between px-3 sm:px-6 gap-2">
+
+          {/* Left — hamburger + welcome */}
           <div className="flex items-center gap-2 min-w-0">
             <button
               onClick={() => setDrawerOpen(true)}
@@ -50,7 +45,9 @@ export default function DashboardLayout({ role }) {
 
             <span className="text-xs sm:text-sm text-slate-500 truncate">
               <span className="hidden sm:inline">Welcome, </span>
-              <span className="font-medium text-slate-800">{user?.email}</span>
+              <span className="font-medium text-slate-800">
+                {user?.profile?.name || user?.email}
+              </span>
             </span>
 
             {activeSem && (role === 'ADMIN' || role === 'FACULTY') && (
@@ -60,7 +57,10 @@ export default function DashboardLayout({ role }) {
             )}
           </div>
 
+          {/* Right — notification bell + profile (student) + logout */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+
+            {/* Bell */}
             <Link
               to={notifBase}
               className="relative p-2.5 rounded-lg hover:bg-slate-100"
@@ -75,6 +75,19 @@ export default function DashboardLayout({ role }) {
               )}
             </Link>
 
+            {/* Profile icon — students only */}
+            {role === 'STUDENT' && (
+              <Link
+                to="/student/profile"
+                className="p-2.5 rounded-lg hover:bg-slate-100 transition text-slate-600 hover:text-brand-700"
+                title="My Profile"
+                aria-label="My Profile"
+              >
+                <User size={18} />
+              </Link>
+            )}
+
+            {/* Logout */}
             <button
               onClick={handleLogout}
               className="flex items-center gap-1.5 text-sm px-2.5 sm:px-3 py-2 rounded-lg hover:bg-slate-100 min-h-[40px] touch-manipulation"

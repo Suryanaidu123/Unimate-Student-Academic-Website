@@ -15,6 +15,7 @@ const CLEANUP_OPTIONS = [
   { key: 'old_notifications', label: 'Delete Notifications Older Than 30 Days', description: 'Removes old notification records.' },
   { key: 'expired_otps', label: 'Delete Expired OTPs', description: 'Removes expired OTP requests.' },
   { key: 'old_audit_logs', label: 'Delete Audit Logs Older Than 90 Days', description: 'Removes old audit logs.' },
+  { key: 'clear_lab_faculty', label: 'Clear Lab → Faculty Assignments', description: 'Removes any existing faculty assignments from Labs. Labs are not assigned to faculty.' },
 ];
 
 function StorageCard({ title, icon: Icon, storage, onRefresh, loading, extraFooter }) {

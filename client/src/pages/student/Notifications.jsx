@@ -7,11 +7,13 @@ import { useBadges } from '../../context/BadgeContext.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import Badge from '../../components/ui/Badge.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import { useNotifications } from '../../context/NotificationContext.jsx';
 
 const TYPE_VARIANTS = {
   IMPORTANT_ANNOUNCEMENT: 'danger',
-  ASSIGNMENT_CREATED: 'brand',
+  NEW_ACTIVITY:           'brand',
+  ASSIGNMENT_CREATED:     'brand',
   ASSIGNMENT_DUE_SOON: 'warning',
   ASSIGNMENT_OVERDUE: 'danger',
   MARKS_PUBLISHED: 'success',
@@ -41,6 +43,8 @@ export default function StudentNotifications() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [filter, setFilter] = useState('ALL');
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
   const { refreshUnread } = useNotifications();
   const navigate = useNavigate();
 
@@ -95,6 +99,19 @@ useEffect(() => { markSectionRead('notifications'); }, [markSectionRead]);
     } finally { setBusyId(null); }
   }
 
+  async function deleteAll() {
+    setDeletingAll(true);
+    try {
+      await api.delete('/notifications/delete-all');
+      setItems([]);
+      await refreshUnread();
+      toast.success('All notifications deleted');
+      setConfirmDeleteAll(false);
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed');
+    } finally { setDeletingAll(false); }
+  }
+
   // Clicking an exam notification goes to the Exams page
   async function handleClick(n) {
     if (n.type === 'EXAM_SCHEDULED') {
@@ -118,9 +135,16 @@ useEffect(() => { markSectionRead('notifications'); }, [markSectionRead]);
               : 'You are all caught up.'}
           </p>
         </div>
-        <Button variant="secondary" onClick={markAll} disabled={busyId === 'all'}>
-          <CheckCheck size={16} /> Mark all as read
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="secondary" onClick={markAll} disabled={busyId === 'all'}>
+            <CheckCheck size={16} /> Mark all as read
+          </Button>
+          {items.length > 0 && (
+            <Button variant="danger" onClick={() => setConfirmDeleteAll(true)}>
+              <Trash2 size={15} /> Delete All
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card>
@@ -208,6 +232,16 @@ useEffect(() => { markSectionRead('notifications'); }, [markSectionRead]);
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDeleteAll}
+        title="Delete All Notifications"
+        message={`This will permanently delete all ${items.length} notification${items.length !== 1 ? 's' : ''}. This cannot be undone.`}
+        confirmLabel="Delete All"
+        onConfirm={deleteAll}
+        onCancel={() => setConfirmDeleteAll(false)}
+        loading={deletingAll}
+      />
     </div>
   );
 }

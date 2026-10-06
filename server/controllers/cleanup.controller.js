@@ -38,6 +38,26 @@ exports.cleanup = async (req, res, next) => {
         label = 'audit logs older than 90 days';
         break;
       }
+      case 'clear_lab_faculty': {
+        const Subject = require('../models/Subject.model');
+        const Faculty = require('../models/Faculty.model');
+        // 1. Collect all LAB subject IDs
+        const labs = await Subject.find({ type: 'LAB' }).select('_id').lean();
+        const labIds = labs.map((l) => l._id);
+        // 2. Clear facultyId on all LAB subjects
+        const subResult = await Subject.updateMany(
+          { type: 'LAB', facultyId: { $exists: true, $ne: null } },
+          { $unset: { facultyId: '' } }
+        );
+        // 3. Remove lab IDs from every Faculty.assignedSubjects array
+        const facResult = await Faculty.updateMany(
+          { assignedSubjects: { $in: labIds } },
+          { $pull: { assignedSubjects: { $in: labIds } } }
+        );
+        deleted = subResult.modifiedCount + facResult.modifiedCount;
+        label = `lab→faculty assignments removed (${subResult.modifiedCount} subjects, ${facResult.modifiedCount} faculty records updated)`;
+        break;
+      }
       default:
         return res.status(400).json({ success: false, message: 'Unknown cleanup target' });
     }

@@ -11,6 +11,7 @@ router.get('/exam-notifications', ctrl.myExamNotifications);
 
 router.put('/mark-type-read', ctrl.markTypeRead);
 router.put('/read-all', ctrl.markAllRead);
+router.delete('/delete-all', ctrl.deleteAll);
 router.put('/:id/read', ctrl.markRead);
 router.delete('/:id', ctrl.remove);
 

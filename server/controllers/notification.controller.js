@@ -33,6 +33,16 @@ exports.remove = async (req, res, next) => {
   try { return success(res, await service.remove(req.user.userId, req.params.id)); } catch (e) { next(e); }
 };
 
+exports.deleteAll = async (req, res, next) => {
+  try {
+    // Delete all notifications for this user EXCEPT those linked to active Activity docs
+    // (type = ACTIVITY_ANNOUNCEMENT is a future type; for now we protect nothing by type —
+    //  activities are a separate system and don't create Notification rows)
+    const result = await Notification.deleteMany({ recipientId: req.user.userId });
+    return success(res, { deleted: result.deletedCount }, 'All notifications deleted');
+  } catch (e) { next(e); }
+};
+
 exports.create = async (req, res, next) => {
   try {
     const data = await service.createManual({ ...req.body, createdBy: req.user.userId });

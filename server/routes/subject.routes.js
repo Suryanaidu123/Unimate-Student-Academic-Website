@@ -12,6 +12,7 @@ router.get('/:id', ctrl.getById);
 router.use(requireRole('ADMIN'));
 router.post('/', validate(createSubjectSchema), ctrl.create);
 router.put('/:id', validate(updateSubjectSchema), ctrl.update);
+router.delete('/cleanup/activities', ctrl.cleanupActivities);
 router.delete('/:id', ctrl.remove);
 
 module.exports = router;

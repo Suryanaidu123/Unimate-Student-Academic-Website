@@ -10,7 +10,6 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 import MarksImportModal from '../../components/MarksImportModal.jsx';
 
 const YEAR_SEMESTERS = { 2: [3, 4], 3: [5, 6], 4: [7, 8] };
-const SECTIONS = ['A', 'B', 'C', 'D'];
 
 function computeMid(written, online, assignment) {
   const w = Number(written || 0), o = Number(online || 0), a = Number(assignment || 0);
@@ -21,7 +20,6 @@ function computeInternal(m1, m2) { return Math.max(m1 || 0, m2 || 0); }
 export default function FacultyMarks() {
   const [year, setYear]         = useState('');
   const [semester, setSemester] = useState('');
-  const [section, setSection]   = useState('');
   const [subjectId, setSubjectId] = useState('');
   const [examType, setExamType] = useState('MID1');
 
@@ -47,10 +45,10 @@ export default function FacultyMarks() {
 
   // ── reset cascades ────────────────────────────────────────────────────────
   useEffect(() => {
-    setSemester(''); setSection(''); setSubjectId(''); setStudents([]); setMarksMap({});
+    setSemester(''); setSubjectId(''); setStudents([]); setMarksMap({});
   }, [year]);
   useEffect(() => {
-    setSection(''); setSubjectId(''); setStudents([]); setMarksMap({});
+    setSubjectId(''); setStudents([]); setMarksMap({});
   }, [semester]);
 
   // ── load subjects ─────────────────────────────────────────────────────────
@@ -63,11 +61,11 @@ export default function FacultyMarks() {
 
   // ── load students + existing marks ───────────────────────────────────────
   useEffect(() => {
-    if (!subjectId || !section) { setStudents([]); setMarksMap({}); return; }
+    if (!subjectId) { setStudents([]); setMarksMap({}); return; }
     setLoading(true);
     Promise.all([
-      api.get(`/lookup/students?year=${year}&section=${section}`),
-      api.get(`/marks?subjectId=${subjectId}&section=${section}`),
+      api.get(`/lookup/students?year=${year}`),
+      api.get(`/marks?subjectId=${subjectId}`),
     ])
       .then(([sRes, mRes]) => {
         const list = [...(sRes.data.data || [])];
@@ -93,18 +91,16 @@ export default function FacultyMarks() {
       })
       .catch(() => toast.error('Failed to load data'))
       .finally(() => setLoading(false));
-  }, [subjectId, section, year]);
+  }, [subjectId, year]);
 
   // ── records list (bottom table) ───────────────────────────────────────────
   function loadRecords() {
     if (!subjectId) { setRecords([]); return; }
-    const params = new URLSearchParams({ subjectId });
-    if (section) params.set('section', section);
-    api.get(`/marks?${params.toString()}`)
+    api.get(`/marks?subjectId=${subjectId}`)
       .then((r) => setRecords(r.data.data.items || []))
       .catch(() => {});
   }
-  useEffect(loadRecords, [subjectId, section]);
+  useEffect(loadRecords, [subjectId]);
 
   // ── inline cell update ────────────────────────────────────────────────────
   // While the user is typing we store a raw string draft so they can clear
@@ -222,35 +218,22 @@ export default function FacultyMarks() {
     } finally { setActionLoading(false); }
   }
 
-  // ── delete all records for current subject + section + mid ──────────────
+  // ── delete all records for current subject + section ────────────────────
   async function deleteAll() {
     setActionLoading(true);
     try {
-      // Filter records table to only those matching the current midKey
-      // (records that have non-zero data for this mid).
-      const targets = records.filter((r) => {
-        const mid = r[midKey];
-        return mid && (mid.written > 0 || mid.online > 0 || mid.assignment > 0 || mid.total > 0);
-      });
-      if (targets.length === 0) {
+      if (records.length === 0) {
         toast.error('No saved marks found for this selection.');
         setConfirmDeleteAll(false);
         setActionLoading(false);
         return;
       }
-      await Promise.all(targets.map((r) => api.delete(`/marks/${r._id}`)));
-      toast.success(`Removed ${targets.length} marks record(s).`);
+      // Delete every record shown in the table (all records for this subject+section)
+      await Promise.all(records.map((r) => api.delete(`/marks/${r._id}`)));
+      toast.success(`Removed ${records.length} marks record(s).`);
       setConfirmDeleteAll(false);
+      setMarksMap({});
       loadRecords();
-      // Reset marksMap for affected students
-      setMarksMap((prev) => {
-        const next = { ...prev };
-        targets.forEach((r) => {
-          const sid = String(r.studentId?._id || r.studentId);
-          delete next[sid];
-        });
-        return next;
-      });
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to delete all marks');
     } finally { setActionLoading(false); }
@@ -270,7 +253,7 @@ export default function FacultyMarks() {
   // ── derived ───────────────────────────────────────────────────────────────
   const noSubjectsAssigned = year && semester && subjects.length === 0;
   const midKey = examType === 'MID1' ? 'mid1' : 'mid2';
-  const canImport = !!(subjectId && section && students.length > 0);
+  const canImport = !!(subjectId && students.length > 0);
 
   return (
     <div className="space-y-4">
@@ -283,7 +266,7 @@ export default function FacultyMarks() {
 
       {/* ── 1. Class selector ── */}
       <Card title="1. Select Class">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <label className="block">
             <span className="label">Year</span>
             <select className="input" value={year} onChange={(e) => setYear(e.target.value)}>
@@ -298,13 +281,6 @@ export default function FacultyMarks() {
               {year && YEAR_SEMESTERS[Number(year)]?.map((s) => (
                 <option key={s} value={s}>Semester {s}</option>
               ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="label">Section</span>
-            <select className="input" value={section} onChange={(e) => setSection(e.target.value)} disabled={!semester}>
-              <option value="">Select</option>
-              {SECTIONS.map((s) => <option key={s} value={s}>Section {s}</option>)}
             </select>
           </label>
           <label className="block">
@@ -333,7 +309,7 @@ export default function FacultyMarks() {
       </Card>
 
       {/* ── 2. Mid selector + entry-mode toggle ── */}
-      {subjectId && section && students.length > 0 && (
+      {subjectId && students.length > 0 && (
         <Card>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm font-medium text-slate-700">Entering:</span>
@@ -372,7 +348,7 @@ export default function FacultyMarks() {
                 variant="secondary"
                 onClick={() => setImportOpen(true)}
                 disabled={!canImport}
-                title={canImport ? 'Import marks from Excel or CSV' : 'Select a subject and section first'}
+                title={canImport ? 'Import marks from Excel or CSV' : 'Select a subject first'}
               >
                 <Upload size={15} /> Upload Excel / CSV
               </Button>
@@ -382,13 +358,13 @@ export default function FacultyMarks() {
       )}
 
       {/* ── 3. Manual bulk-entry table ── */}
-      {subjectId && section && (
+      {subjectId && (
         <Card title={`2. Manual Entry — ${students.length} student${students.length === 1 ? '' : 's'}`}>
           {loading ? (
             <p className="text-sm text-slate-500 py-6 text-center">Loading students…</p>
           ) : students.length === 0 ? (
             <p className="text-sm text-slate-500 py-6 text-center">
-              No students found for this year + section.
+              No students found for this year.
             </p>
           ) : (
             <>
@@ -613,15 +589,15 @@ export default function FacultyMarks() {
         onClose={() => setImportOpen(false)}
         subjectId={subjectId}
         year={year}
-        section={section}
+        section=""
         midKey={midKey}
         onSaved={() => {
           loadRecords();
           // Reload marksMap so the manual table reflects imported values
-          if (subjectId && section) {
+          if (subjectId) {
             Promise.all([
-              api.get(`/lookup/students?year=${year}&section=${section}`),
-              api.get(`/marks?subjectId=${subjectId}&section=${section}`),
+              api.get(`/lookup/students?year=${year}`),
+              api.get(`/marks?subjectId=${subjectId}`),
             ]).then(([sRes, mRes]) => {
               const list = [...(sRes.data.data || [])];
               list.sort((a, b) =>

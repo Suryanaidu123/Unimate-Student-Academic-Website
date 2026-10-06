@@ -4,18 +4,55 @@ import api from '../../services/api.js';
 import StatCard from '../../components/StatCard.jsx';
 import Card from '../../components/ui/Card.jsx';
 import Badge from '../../components/ui/Badge.jsx';
+import ActivityMarquee from '../../components/ActivityMarquee.jsx';
+
+const TYPES_WITH_OPTIONS = ['SINGLE_CHOICE', 'MULTIPLE_CHOICE', 'SURVEY'];
 
 export default function FacultyDashboard() {
-  const [d, setD] = useState(null);
+  const [d, setD]                 = useState(null);
+  const [resultMap, setResultMap] = useState({});
 
   useEffect(() => {
     api.get('/dashboard/faculty').then((r) => setD(r.data.data));
   }, []);
 
+  // Build resultMap from /activities/faculty/active — server returns full responses + options
+  useEffect(() => {
+    api.get('/activities/faculty/active')
+      .then((r) => {
+        const data = r.data.data || [];
+        const map = {};
+        data.forEach((a) => {
+          if (!TYPES_WITH_OPTIONS.includes(a.type)) return;
+          const counts = {};
+          (a.options || []).forEach((o) => { counts[o.label || o] = 0; });
+          (a.responses || []).forEach((resp) => {
+            (resp.choices || []).forEach((c) => { counts[c] = (counts[c] || 0) + 1; });
+          });
+          if (Object.keys(counts).length > 0) {
+            map[String(a._id)] = Object.entries(counts)
+              .map(([k, v]) => `${k}: ${v}`).join(' | ');
+          }
+        });
+        setResultMap(map);
+      })
+      .catch(() => {});
+  }, []);
+
   if (!d) return <p className="text-sm text-slate-500 py-6 text-center">Loading…</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+
+      {/* Running announcement ticker — hidden when no active faculty announcements */}
+      <ActivityMarquee
+        apiUrl="/activities/faculty/active"
+        navigateTo="/faculty/activities"
+        resultMap={resultMap}
+        tickerLabel="Announcement Results"
+        showEmpty={false}
+      />
+
       <div>
         <h1 className="text-2xl font-bold">Welcome, {d.faculty.name}</h1>
         <p className="text-sm text-slate-500">
@@ -24,30 +61,10 @@ export default function FacultyDashboard() {
       </div>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={BookOpen}
-          label="Assigned Subjects"
-          value={d.subjects.length}
-          color="brand"
-        />
-        <StatCard
-          icon={Users}
-          label="My Students"
-          value={d.studentCount}
-          color="green"
-        />
-        <StatCard
-          icon={ClipboardList}
-          label="Assignments"
-          value={d.assignments.length}
-          color="amber"
-        />
-        <StatCard
-          icon={Bell}
-          label="Unread"
-          value={d.unread}
-          color="red"
-        />
+        <StatCard icon={BookOpen}     label="Assigned Subjects" value={d.subjects.length}  color="brand" />
+        <StatCard icon={Users}        label="My Students"       value={d.studentCount}     color="green" />
+        <StatCard icon={ClipboardList} label="Assignments"      value={d.assignments.length} color="amber" />
+        <StatCard icon={Bell}         label="Unread"            value={d.unread}            color="red" />
       </div>
 
       <Card title="Assigned Subjects">

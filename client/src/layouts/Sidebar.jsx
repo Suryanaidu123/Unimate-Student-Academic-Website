@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ClipboardList, GraduationCap, FileText,
   CalendarDays, Bell, User, Users, ScrollText, MessageSquare, X,
-  History,
+  History, Megaphone, BookMarked, TrendingUp,
 } from 'lucide-react';
 import { useBadges } from '../context/BadgeContext.jsx';
 import api from '../services/api.js';
@@ -18,67 +18,76 @@ const ROUTE_BADGE = {
 
 const links = {
   STUDENT: [
-    { to: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/student/dashboard',      label: 'Dashboard',          icon: LayoutDashboard },
 
     // Academics
-    { to: '/student/subjects', label: 'Subjects', icon: BookOpen },
-    { to: '/student/exams', label: 'Exams', icon: CalendarDays },
-    { to: '/student/marks', label: 'Marks', icon: GraduationCap },
+    { to: '/student/subjects',       label: 'Subjects',           icon: BookOpen },
+    { to: '/student/exams',          label: 'Exams',              icon: CalendarDays },
+    { to: '/student/marks',          label: 'Marks',              icon: GraduationCap },
 
     // Learning
-    { to: '/student/materials', label: 'Academic Materials', icon: FileText },
-    { to: '/student/notes', label: 'Notes', icon: FileText },
-    { to: '/student/assignments', label: 'Assignments', icon: ClipboardList },
+    { to: '/student/materials',      label: 'Academic Materials', icon: FileText },
+    { to: '/student/assignments',    label: 'Assignments',        icon: ClipboardList },
+    { to: '/student/gate-resources', label: 'GATE Resources',     icon: BookMarked },
+
+    // Activities & GPA
+    { to: '/student/activities',     label: 'Activities',         icon: Megaphone },
+    { to: '/student/sgpa-cgpa',      label: 'SGPA & CGPA',        icon: TrendingUp },
 
     // Communication
-    { to: '/student/notifications', label: 'Notifications', icon: Bell },
-    { to: '/student/contact-admin', label: 'Contact Admin', icon: MessageSquare },
-    { to: '/student/feedback', label: 'Feedback', icon: MessageSquare },
+    { to: '/student/notifications',  label: 'Notifications',      icon: Bell },
+    { to: '/student/contact-admin',  label: 'Contact Admin',      icon: MessageSquare },
+    { to: '/student/feedback',       label: 'Feedback',           icon: MessageSquare },
 
     // Personal
-    { to: '/student/profile', label: 'Profile', icon: User },
+    { to: '/student/profile',        label: 'Profile',            icon: User },
   ],
 
   FACULTY: [
-    { to: '/faculty/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/faculty/dashboard',      label: 'Dashboard',          icon: LayoutDashboard },
 
     // Academics
-    { to: '/faculty/subjects', label: 'My Subjects', icon: BookOpen },
-    { to: '/faculty/exams', label: 'Exams', icon: CalendarDays },
-    { to: '/faculty/marks', label: 'Marks', icon: GraduationCap },
+    { to: '/faculty/subjects',       label: 'My Subjects',        icon: BookOpen },
+    { to: '/faculty/exams',          label: 'Exams',              icon: CalendarDays },
+    { to: '/faculty/marks',          label: 'Marks',              icon: GraduationCap },
 
-    // Materials
-    { to: '/faculty/materials', label: 'Academic Materials', icon: FileText },
+    // Resources & Activities
+    { to: '/faculty/materials',      label: 'Academic Materials', icon: FileText },
+    { to: '/faculty/gate-resources', label: 'GATE Resources',     icon: BookMarked },
+    { to: '/faculty/activities',     label: 'Activities',         icon: Megaphone },
+    { to: '/faculty/sgpa-cgpa',      label: 'SGPA & CGPA',        icon: TrendingUp },
 
     // Communication
-    { to: '/faculty/notifications', label: 'Notifications', icon: Bell },
-    { to: '/faculty/feedback', label: 'Feedback', icon: MessageSquare },
+    { to: '/faculty/notifications',  label: 'Notifications',      icon: Bell },
+    { to: '/faculty/feedback',       label: 'Feedback',           icon: MessageSquare },
   ],
 
   ADMIN: [
-    { to: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/admin/dashboard',        label: 'Dashboard',          icon: LayoutDashboard },
 
     // User management
-    { to: '/admin/students', label: 'Students', icon: Users },
-    { to: '/admin/bulk-students', label: 'Bulk Add Students', icon: Users },
-    { to: '/admin/faculty', label: 'Faculty', icon: User },
+    { to: '/admin/students',         label: 'Students',           icon: Users },
+    { to: '/admin/bulk-students',    label: 'Bulk Add Students',  icon: Users },
+    { to: '/admin/faculty',          label: 'Faculty',            icon: User },
 
     // Academics
-    { to: '/admin/semesters', label: 'Semesters', icon: GraduationCap },
-    { to: '/admin/subjects', label: 'Subjects & Labs', icon: BookOpen },
-    { to: '/admin/exams', label: 'Exams', icon: CalendarDays },
-    { to: '/admin/marks', label: 'Marks', icon: GraduationCap },
+    { to: '/admin/semesters',        label: 'Semesters',          icon: GraduationCap },
+    { to: '/admin/subjects',         label: 'Subjects & Labs',    icon: BookOpen },
+    { to: '/admin/exams',            label: 'Exams',              icon: CalendarDays },
+    { to: '/admin/marks',            label: 'Marks',              icon: GraduationCap },
 
-    // Materials & tracking
-    { to: '/admin/materials', label: 'Academic Materials', icon: FileText },
-    { to: '/admin/materials-history', label: 'Materials History', icon: History },
+    // Materials & Activities
+    { to: '/admin/materials',        label: 'Academic Materials', icon: FileText },
+    { to: '/admin/materials-history',label: 'Materials History',  icon: History },
+    { to: '/admin/activities',       label: 'Activities',         icon: Megaphone },
+    { to: '/admin/sgpa-cgpa',        label: 'SGPA & CGPA',        icon: TrendingUp },
 
     // Communication
-    { to: '/admin/notifications', label: 'Notifications', icon: Bell },
-    { to: '/admin/feedback', label: 'Feedback', icon: MessageSquare, badge: 'feedback' },
+    { to: '/admin/notifications',    label: 'Notifications',      icon: Bell },
+    { to: '/admin/feedback',         label: 'Feedback',           icon: MessageSquare, badge: 'feedback' },
 
     // System
-    { to: '/admin/audit-logs', label: 'Audit Logs', icon: ScrollText },
+    { to: '/admin/audit-logs',       label: 'Audit Logs',         icon: ScrollText },
   ],
 };
 

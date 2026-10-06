@@ -19,5 +19,8 @@ router.use('/dashboard', require('./dashboard.routes'));
 router.use('/contact', require('./contact.routes'));
 router.use('/lookup', require('./lookup.routes'));
 router.use('/materials', require('./material.routes'));
+router.use('/activities', require('./activity.routes'));
+router.use('/gate-resources', require('./gateResource.routes'));
+router.use('/sgpa-cgpa', require('./sgpaCgpa.routes'));
 router.use('/debug-pdf', require('./debugPdf.routes'));
 module.exports = router;

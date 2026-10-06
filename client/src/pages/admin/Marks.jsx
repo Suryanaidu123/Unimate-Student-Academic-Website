@@ -4,7 +4,6 @@ import { Lock, Unlock, Send } from 'lucide-react';
 import api from '../../services/api.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
-import Input from '../../components/ui/Input.jsx';
 import Table from '../../components/ui/Table.jsx';
 import Badge from '../../components/ui/Badge.jsx';
 import { useSemester, SEMESTER_KEYS } from '../../context/SemesterContext.jsx';
@@ -21,7 +20,6 @@ export default function AdminMarks() {
   const [filters, setFilters] = useState({
     subjectId: '',
     status: '',
-    section: '',
   });
 
   // Reset subject selection when semester changes
@@ -57,14 +55,13 @@ export default function AdminMarks() {
     });
     if (filters.subjectId) params.set('subjectId', filters.subjectId);
     if (filters.status) params.set('status', filters.status);
-    if (filters.section) params.set('section', filters.section);
 
     api.get(`/marks?${params.toString()}`)
       .then((r) => setItems(r.data.data.items || []))
       .catch((err) => toast.error(err.response?.data?.message || 'Failed to load marks'))
       .finally(() => setLoading(false));
   }
-  useEffect(loadMarks, [year, semester, filters.subjectId, filters.status, filters.section]);
+  useEffect(loadMarks, [year, semester, filters.subjectId, filters.status]);
 
   async function lockRow(id) {
     try { await api.post(`/marks/${id}/lock`); toast.success('Marks locked'); loadMarks(); }
@@ -125,7 +122,7 @@ export default function AdminMarks() {
 
       {/* Filters */}
       <Card title="Filters">
-        <div className="grid md:grid-cols-3 gap-3">
+        <div className="grid md:grid-cols-2 gap-3">
           <label className="block">
             <span className="label">
               Subject
@@ -163,12 +160,6 @@ export default function AdminMarks() {
               <option value="LOCKED">Locked</option>
             </select>
           </label>
-
-          <Input
-            label="Section (A / B / C)"
-            value={filters.section}
-            onChange={(e) => setFilters({ ...filters, section: e.target.value })}
-          />
         </div>
       </Card>
 
@@ -189,10 +180,6 @@ export default function AdminMarks() {
               {
                 key: 'sem', label: 'Sem',
                 render: (r) => r.studentId?.currentSemester || '—',
-              },
-              {
-                key: 'section', label: 'Sec',
-                render: (r) => r.studentId?.section || '—',
               },
               {
                 key: 'subject', label: 'Subject',
