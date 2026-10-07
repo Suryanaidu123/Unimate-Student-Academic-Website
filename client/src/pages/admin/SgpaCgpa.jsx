@@ -189,23 +189,32 @@ export default function AdminSgpaCgpa() {
                 {/* Semester SGPA toggles */}
                 <div className="flex flex-wrap gap-2 mb-3">
                   {(yearData.semesters || []).map((s) => {
-                    const key = `${yearData.year}-${s.semester}`;
-                    const busy = toggling === key;
+                    const key    = `${yearData.year}-${s.semester}`;
+                    const busy   = toggling === key;
+                    const future = s.isFuture;
                     return (
                       <button
                         key={s.semester}
-                        onClick={() => toggleSem(yearData.year, s.semester, s.sgpaActive)}
-                        disabled={busy}
+                        onClick={() => !future && toggleSem(yearData.year, s.semester, s.sgpaActive)}
+                        disabled={busy || future}
+                        title={future
+                          ? `Cannot activate — students are not yet in semester ${s.label}`
+                          : undefined}
                         className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition ${
-                          s.sgpaActive
+                          future
+                            ? 'bg-slate-50 border-slate-200 text-slate-300 cursor-not-allowed'
+                            : s.sgpaActive
                             ? 'bg-green-100 border-green-300 text-green-800 hover:bg-green-200'
                             : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
                         }`}
                       >
-                        {s.sgpaActive
+                        {future
+                          ? <span className="text-slate-300">—</span>
+                          : s.sgpaActive
                           ? <ToggleRight size={14} className="text-green-600" />
                           : <ToggleLeft  size={14} className="text-slate-400" />}
                         {s.label} SGPA
+                        {future && <span className="text-[10px] text-slate-300 ml-1">(future)</span>}
                       </button>
                     );
                   })}

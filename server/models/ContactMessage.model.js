@@ -12,6 +12,7 @@ const contactMessageSchema = new mongoose.Schema({
   subject: { type: String, required: true, trim: true },
   body: { type: String, required: true },
   status: { type: String, enum: ['OPEN', 'REPLIED', 'CLOSED'], default: 'OPEN' },
+  isRead: { type: Boolean, default: false },   // admin has opened/read this message
   replies: [replySchema],
 }, { timestamps: true });
 

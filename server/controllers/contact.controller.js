@@ -38,3 +38,20 @@ exports.reply = async (req, res, next) => {
 exports.remove = async (req, res, next) => {
   try { return success(res, await service.remove(req.params.id, req.user)); } catch (e) { next(e); }
 };
+
+exports.removeOwn = async (req, res, next) => {
+  try { return success(res, await service.removeOwn(req.params.id, req.user), 'Message deleted'); }
+  catch (e) { next(e); }
+};
+
+exports.unreadCount = async (req, res, next) => {
+  try { return success(res, { count: await service.unreadCount() }); } catch (e) { next(e); }
+};
+
+exports.markRead = async (req, res, next) => {
+  try { await service.markRead(req.params.id); return success(res, { ok: true }); } catch (e) { next(e); }
+};
+
+exports.markAllRead = async (req, res, next) => {
+  try { return success(res, await service.markAllRead(), 'Marked all read'); } catch (e) { next(e); }
+};

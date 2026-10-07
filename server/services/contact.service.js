@@ -68,6 +68,22 @@ async function setBlocked(studentId, blocked, actor) {
 
   return student;
 }
+// Admin — unread count
+async function unreadCount() {
+  return ContactMessage.countDocuments({ isRead: false });
+}
+
+// Admin — mark one message as read
+async function markRead(id) {
+  await ContactMessage.findByIdAndUpdate(id, { isRead: true });
+}
+
+// Admin — mark all as read
+async function markAllRead() {
+  const r = await ContactMessage.updateMany({ isRead: false }, { isRead: true });
+  return { modified: r.modifiedCount };
+}
+
 // Admin — list all
 async function listAll({ status, q, page = 1, limit = 50 }) {
   const query = {};
@@ -129,6 +145,22 @@ async function reply(id, body, actor) {
   return m;
 }
 
+// Student — delete own message
+async function removeOwn(id, user) {
+  const m = await ContactMessage.findById(id);
+  if (!m) throw ApiError.notFound('Message not found');
+  if (String(m.studentId) !== String(user.studentId)) {
+    throw ApiError.forbidden('You can only delete your own messages.');
+  }
+  await m.deleteOne();
+  await auditLog.log({
+    actor: user, action: 'CONTACT_MESSAGE_DELETE_SELF',
+    entityType: 'ContactMessage', entityId: id,
+    description: `Student deleted own message: ${m.subject}`,
+  });
+  return { ok: true };
+}
+
 // Admin — delete
 async function remove(id, actor) {
   const m = await ContactMessage.findByIdAndDelete(id);
@@ -140,4 +172,4 @@ async function remove(id, actor) {
   return { ok: true };
 }
 
-module.exports = { createMessage, listMine, listAll, getOne, reply, remove,setBlocked};
+module.exports = { createMessage, listMine, listAll, getOne, reply, remove, removeOwn, setBlocked, unreadCount, markRead, markAllRead };

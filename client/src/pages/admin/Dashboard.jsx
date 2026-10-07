@@ -16,6 +16,7 @@ const CLEANUP_OPTIONS = [
   { key: 'expired_otps', label: 'Delete Expired OTPs', description: 'Removes expired OTP requests.' },
   { key: 'old_audit_logs', label: 'Delete Audit Logs Older Than 90 Days', description: 'Removes old audit logs.' },
   { key: 'clear_lab_faculty', label: 'Clear Lab → Faculty Assignments', description: 'Removes any existing faculty assignments from Labs. Labs are not assigned to faculty.' },
+  { key: 'fix_sgpa_index',   label: 'Fix SGPA Activation Index (one-time)',  description: 'Removes old compound-index activation docs. Run once after upgrading to semester-wise activation.' },
 ];
 
 function StorageCard({ title, icon: Icon, storage, onRefresh, loading, extraFooter }) {

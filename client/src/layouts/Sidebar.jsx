@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, BookOpen, ClipboardList, GraduationCap, FileText,
   CalendarDays, Bell, User, Users, ScrollText, MessageSquare, X,
-  History, Megaphone, BookMarked, TrendingUp,
+  History, Megaphone, BookMarked, TrendingUp, HeadphonesIcon,
 } from 'lucide-react';
 import { useBadges } from '../context/BadgeContext.jsx';
 import api from '../services/api.js';
@@ -84,6 +84,7 @@ const links = {
 
     // Communication
     { to: '/admin/notifications',    label: 'Notifications',      icon: Bell },
+    { to: '/admin/messages',         label: 'Student Support',    icon: HeadphonesIcon, badge: 'messages' },
     { to: '/admin/feedback',         label: 'Feedback',           icon: MessageSquare, badge: 'feedback' },
 
     // System
@@ -103,6 +104,7 @@ function Badge({ count }) {
 export default function Sidebar({ role, open = false, onClose }) {
   const { badges } = useBadges();
   const [feedbackCount, setFeedbackCount] = useState(0);
+  const [messagesCount, setMessagesCount] = useState(0);
 
   // Load unread feedback count for ADMIN role
   useEffect(() => {
@@ -115,11 +117,8 @@ export default function Sidebar({ role, open = false, onClose }) {
   };
   fetchCount();
 
-  // Refetch immediately when Feedback page marks items as read
   const onChange = () => fetchCount();
   window.addEventListener('feedback-count-changed', onChange);
-
-  // Fallback polling
   const t = setInterval(fetchCount, 30000);
 
   return () => {
@@ -127,6 +126,28 @@ export default function Sidebar({ role, open = false, onClose }) {
     clearInterval(t);
   };
 }, [role]);
+
+  // Load unread contact messages count for ADMIN role
+  useEffect(() => {
+    if (role !== 'ADMIN') return;
+
+    const fetchMsgCount = () => {
+      api.get('/contact/unread-count')
+        .then((r) => setMessagesCount(r.data.data.count || 0))
+        .catch(() => {});
+    };
+    fetchMsgCount();
+    const t = setInterval(fetchMsgCount, 20000);
+
+    // Allow Messages page to reset the badge via a custom event
+    const onRead = () => fetchMsgCount();
+    window.addEventListener('messages-count-changed', onRead);
+
+    return () => {
+      clearInterval(t);
+      window.removeEventListener('messages-count-changed', onRead);
+    };
+  }, [role]);
 
   // Lock body scroll while mobile drawer is open
   useEffect(() => {
@@ -167,6 +188,8 @@ export default function Sidebar({ role, open = false, onClose }) {
             ? (badges?.[badgeKey] || 0)
             : badge === 'feedback'
             ? feedbackCount
+            : badge === 'messages'
+            ? messagesCount
             : 0;
 
           return (

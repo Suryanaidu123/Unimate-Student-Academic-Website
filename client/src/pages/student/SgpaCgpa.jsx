@@ -377,8 +377,8 @@ export default function StudentSgpaCgpa() {
         </Card>
       )}
 
-      {/* ── Failed Subjects ── */}
-      {completedSems.length > 0 && (
+      {/* ── Failed Subjects — only shown when at least one entry window is active ── */}
+      {anyActive && completedSems.length > 0 && (
         <Card title={
           <span className="flex items-center gap-2">
             <AlertTriangle size={16} className="text-amber-500" />

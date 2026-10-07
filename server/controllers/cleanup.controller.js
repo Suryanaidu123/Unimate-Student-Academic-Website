@@ -38,6 +38,24 @@ exports.cleanup = async (req, res, next) => {
         label = 'audit logs older than 90 days';
         break;
       }
+      case 'fix_sgpa_index': {
+        // Drop the old year_1 unique index that blocks per-semester upserts.
+        // The new model only needs the year unique index which Mongoose manages.
+        const mongoose = require('mongoose');
+        const col = mongoose.connection.db.collection('sgpaactivations');
+        try {
+          await col.dropIndex('year_1_semester_1');
+        } catch (_) { /* index may not exist */ }
+        try {
+          await col.dropIndex('year_1_semester_1_sgpaActive_1');
+        } catch (_) { /* ignore */ }
+        // Drop any docs with the old compound structure (year+semester fields)
+        // These had { year: 3, semester: 5 } shape — old model
+        const r = await col.deleteMany({ semester: { $exists: true } });
+        deleted = r.deletedCount;
+        label = `old per-semester SGPA activation docs removed (index dropped)`;
+        break;
+      }
       case 'clear_lab_faculty': {
         const Subject = require('../models/Subject.model');
         const Faculty = require('../models/Faculty.model');
