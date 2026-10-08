@@ -8,6 +8,7 @@ import api from '../../services/api.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import Badge from '../../components/ui/Badge.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
 function relTime(d) {
   const s = Math.floor((Date.now() - new Date(d)) / 1000);
@@ -30,6 +31,9 @@ export default function AdminMessages() {
   const [sending,    setSending]    = useState(false);
   const [q,          setQ]          = useState('');
   const [mobileView, setMobileView] = useState('list');
+  const [confirmDelete, setConfirmDelete] = useState(null); // message id
+  const [confirmBlock,  setConfirmBlock]  = useState(null); // { student, currentlyBlocked }
+  const [saving,        setSaving]        = useState(false);
 
   // ── load list ──────────────────────────────────────────────────────────────
   const load = useCallback(() => {
@@ -88,23 +92,31 @@ export default function AdminMessages() {
 
   // ── delete ────────────────────────────────────────────────────────────────
   async function removeMessage(id) {
-    if (!window.confirm('Delete this message and all its replies?')) return;
+    setConfirmDelete(id);
+  }
+
+  async function doRemoveMessage() {
+    setSaving(true);
     try {
-      await api.delete(`/contact/${id}`);
+      await api.delete(`/contact/${confirmDelete}`);
       toast.success('Deleted');
       setSelected(null);
       setMobileView('list');
       load();
       window.dispatchEvent(new Event('messages-count-changed'));
     } catch { toast.error('Failed'); }
+    finally { setConfirmDelete(null); setSaving(false); }
   }
 
   // ── block / unblock ───────────────────────────────────────────────────────
   async function toggleBlock(student, currentlyBlocked) {
-    const msg = currentlyBlocked
-      ? `Unblock ${student.rollNumber}? They will be able to send messages again.`
-      : `Block ${student.rollNumber}? They will not be able to send new messages.`;
-    if (!window.confirm(msg)) return;
+    setConfirmBlock({ student, currentlyBlocked });
+  }
+
+  async function doToggleBlock() {
+    if (!confirmBlock) return;
+    setSaving(true);
+    const { student, currentlyBlocked } = confirmBlock;
     try {
       await api.post(`/contact/${currentlyBlocked ? 'unblock' : 'block'}/${student._id}`);
       toast.success(currentlyBlocked ? 'Student unblocked.' : 'Student blocked.');
@@ -114,6 +126,7 @@ export default function AdminMessages() {
         setSelected({ ...r.data.data, isRead: true });
       }
     } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    finally { setConfirmBlock(null); setSaving(false); }
   }
 
   const unreadCount = items.filter((m) => !m.isRead).length;
@@ -338,6 +351,30 @@ export default function AdminMessages() {
           ? <div className="bg-white border border-slate-200 rounded-xl p-3">{ListPanel}</div>
           : <div>{DetailPanel}</div>}
       </div>
+
+      {/* ── Confirm dialogs ── */}
+      <ConfirmDialog
+        open={!!confirmDelete}
+        title="Delete Message"
+        message="Delete this message and all its replies? This cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={doRemoveMessage}
+        onCancel={() => setConfirmDelete(null)}
+        loading={saving}
+      />
+      <ConfirmDialog
+        open={!!confirmBlock}
+        title={confirmBlock?.currentlyBlocked ? 'Unblock Student' : 'Block Student'}
+        message={
+          confirmBlock?.currentlyBlocked
+            ? `Unblock ${confirmBlock.student.rollNumber}? They will be able to send messages again.`
+            : `Block ${confirmBlock?.student.rollNumber}? They will not be able to send new messages.`
+        }
+        confirmLabel={confirmBlock?.currentlyBlocked ? 'Unblock' : 'Block'}
+        onConfirm={doToggleBlock}
+        onCancel={() => setConfirmBlock(null)}
+        loading={saving}
+      />
     </div>
   );
 }

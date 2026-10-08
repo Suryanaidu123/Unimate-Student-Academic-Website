@@ -4,6 +4,7 @@ import {
   LayoutDashboard, BookOpen, ClipboardList, GraduationCap, FileText,
   CalendarDays, Bell, User, Users, ScrollText, MessageSquare, X,
   History, Megaphone, BookMarked, TrendingUp, HeadphonesIcon,
+  FolderOpen, ShieldOff, Eye, ShieldCheck,
 } from 'lucide-react';
 import { useBadges } from '../context/BadgeContext.jsx';
 import api from '../services/api.js';
@@ -33,6 +34,7 @@ const links = {
     // Activities & GPA
     { to: '/student/activities',     label: 'Activities',         icon: Megaphone },
     { to: '/student/sgpa-cgpa',      label: 'SGPA & CGPA',        icon: TrendingUp },
+    { to: '/student/documents',      label: 'My Documents',       icon: FolderOpen },
 
     // Communication
     { to: '/student/notifications',  label: 'Notifications',      icon: Bell },
@@ -56,6 +58,7 @@ const links = {
     { to: '/faculty/gate-resources', label: 'GATE Resources',     icon: BookMarked },
     { to: '/faculty/activities',     label: 'Activities',         icon: Megaphone },
     { to: '/faculty/sgpa-cgpa',      label: 'SGPA & CGPA',        icon: TrendingUp },
+    { to: '/faculty/student-docs',   label: 'Student Documents',  icon: FolderOpen },
 
     // Communication
     { to: '/faculty/notifications',  label: 'Notifications',      icon: Bell },
@@ -86,6 +89,12 @@ const links = {
     { to: '/admin/notifications',    label: 'Notifications',      icon: Bell },
     { to: '/admin/messages',         label: 'Student Support',    icon: HeadphonesIcon, badge: 'messages' },
     { to: '/admin/feedback',         label: 'Feedback',           icon: MessageSquare, badge: 'feedback' },
+    { to: '/admin/blocked-accounts', label: 'Blocked Accounts',   icon: ShieldOff },
+
+    // Documents
+    { to: '/admin/doc-visibility',   label: 'Doc Visibility',     icon: Eye },
+    { to: '/admin/student-docs',     label: 'Student Documents',  icon: FolderOpen },
+    { to: '/admin/permissions',      label: 'Permissions',        icon: ShieldCheck },
 
     // System
     { to: '/admin/audit-logs',       label: 'Audit Logs',         icon: ScrollText },

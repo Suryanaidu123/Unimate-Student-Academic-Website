@@ -45,7 +45,16 @@ function isSemActive(doc, sem) {
 
 // ── Admin / Faculty — activation ──────────────────────────────────────────────
 
-async function getActivations() {
+async function getActivations(actor) {
+  // Faculty must have explicit SGPA management permission to view activation controls
+  if (actor && actor.role === 'FACULTY') {
+    const Faculty = require('../models/Faculty.model');
+    const fac = await Faculty.findById(actor.facultyId).select('canManageSgpa').lean();
+    if (!fac?.canManageSgpa) {
+      throw ApiError.forbidden('You do not have permission to manage SGPA/CGPA activation.');
+    }
+  }
+
   const docs = await SgpaActivation.find().lean();
   const map  = {};
   docs.forEach((d) => { map[d.year] = d; });
@@ -83,6 +92,15 @@ async function setSemesterActivation(year, semester, sgpaActive, actor) {
   if (![2, 3, 4].includes(y)) throw ApiError.badRequest('Year must be 2, 3, or 4.');
   if (sem < 1 || sem > 8)     throw ApiError.badRequest('Semester must be 1–8.');
 
+  // Faculty must have explicit SGPA management permission
+  if (actor.role === 'FACULTY') {
+    const Faculty = require('../models/Faculty.model');
+    const fac = await Faculty.findById(actor.facultyId).select('canManageSgpa').lean();
+    if (!fac?.canManageSgpa) {
+      throw ApiError.forbidden('You do not have permission to manage SGPA/CGPA activation. Contact Admin.');
+    }
+  }
+
   // Block future-semester activation: find the highest currentSemester among
   // active students in this year. Only allow activating up to that semester.
   if (!!sgpaActive) {
@@ -115,6 +133,15 @@ async function setSemesterActivation(year, semester, sgpaActive, actor) {
 async function setCgpaActivation(year, cgpaActive, actor) {
   const y = Number(year);
   if (![2, 3, 4].includes(y)) throw ApiError.badRequest('Year must be 2, 3, or 4.');
+
+  // Faculty must have explicit SGPA management permission
+  if (actor.role === 'FACULTY') {
+    const Faculty = require('../models/Faculty.model');
+    const fac = await Faculty.findById(actor.facultyId).select('canManageSgpa').lean();
+    if (!fac?.canManageSgpa) {
+      throw ApiError.forbidden('You do not have permission to manage SGPA/CGPA activation. Contact Admin.');
+    }
+  }
 
   const doc = await SgpaActivation.findOneAndUpdate(
     { year: y },

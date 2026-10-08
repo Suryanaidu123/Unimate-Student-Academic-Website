@@ -22,5 +22,6 @@ router.use('/materials', require('./material.routes'));
 router.use('/activities', require('./activity.routes'));
 router.use('/gate-resources', require('./gateResource.routes'));
 router.use('/sgpa-cgpa', require('./sgpaCgpa.routes'));
+router.use('/student-docs', require('./studentDocument.routes'));
 router.use('/debug-pdf', require('./debugPdf.routes'));
 module.exports = router;

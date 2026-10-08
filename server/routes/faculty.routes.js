@@ -19,6 +19,7 @@ router.post('/', validate(createFacultyStubSchema), ctrl.create);
 router.get('/:id', ctrl.getById);
 router.put('/:id', validate(updateFacultySchema), ctrl.update);
 router.patch('/:id/status', ctrl.setStatus);
+router.patch('/:id/permissions', ctrl.setPermissions);
 router.delete('/:id', ctrl.remove);
 
 module.exports = router;

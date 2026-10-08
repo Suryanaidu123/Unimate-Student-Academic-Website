@@ -12,6 +12,10 @@ const facultySchema = new mongoose.Schema({
   },
   assignedSubjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
   assignedSections: [{ type: String }],
+  // Years this faculty can view student documents for (e.g. [2, 3])
+  documentVisibilityYears: [{ type: Number }],
+  // Permissions granted by Admin
+  canManageSgpa: { type: Boolean, default: false },  // can activate/deactivate SGPA/CGPA
   status: { type: String, enum: ['ACTIVE', 'INACTIVE'], default: 'INACTIVE' },
 }, { timestamps: true });
 

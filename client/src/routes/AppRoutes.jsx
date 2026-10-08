@@ -60,6 +60,12 @@ import AdminMessages        from '../pages/admin/Messages.jsx';
 import AdminAuditLogs       from '../pages/admin/AuditLogs.jsx';
 import AdminActivities      from '../pages/admin/Activities.jsx';
 import AdminSgpaCgpa        from '../pages/admin/SgpaCgpa.jsx';
+import AdminBlockedAccounts from '../pages/admin/BlockedAccounts.jsx';
+import AdminDocVisibility   from '../pages/admin/DocumentVisibility.jsx';
+import AdminStudentDocs     from '../pages/admin/StudentDocuments.jsx';
+import AdminPermissions     from '../pages/admin/Permissions.jsx';
+import StudentDocuments     from '../pages/student/Documents.jsx';
+import FacultyStudentDocs   from '../pages/faculty/StudentDocuments.jsx';
 
 export default function AppRoutes() {
   return (
@@ -96,6 +102,7 @@ export default function AppRoutes() {
         <Route path="activities"    element={<StudentActivities />} />
         <Route path="gate-resources" element={<StudentGateResources />} />
         <Route path="sgpa-cgpa"     element={<StudentSgpaCgpa />} />
+        <Route path="documents"     element={<StudentDocuments />} />
       </Route>
 
       {/* ── Faculty ── */}
@@ -115,6 +122,7 @@ export default function AppRoutes() {
         <Route path="activities"     element={<FacultyActivities />} />
         <Route path="gate-resources" element={<FacultyGateResources />} />
         <Route path="sgpa-cgpa"      element={<FacultySgpaCgpa />} />
+        <Route path="student-docs"   element={<FacultyStudentDocs />} />
       </Route>
 
       {/* ── Admin ── */}
@@ -140,6 +148,10 @@ export default function AppRoutes() {
         <Route path="audit-logs"      element={<AdminAuditLogs />} />
         <Route path="activities"      element={<AdminActivities />} />
         <Route path="sgpa-cgpa"       element={<AdminSgpaCgpa />} />
+        <Route path="blocked-accounts" element={<AdminBlockedAccounts />} />
+        <Route path="doc-visibility"  element={<AdminDocVisibility />} />
+        <Route path="student-docs"    element={<AdminStudentDocs />} />
+        <Route path="permissions"     element={<AdminPermissions />} />
       </Route>
 
       {/* ── 404 ── */}

@@ -20,6 +20,21 @@ exports.setStatus = async (req, res, next) => {
   try { return success(res, await service.setStatus(req.params.id, req.body.status, req.user)); }
   catch (e) { next(e); }
 };
+
+exports.setPermissions = async (req, res, next) => {
+  try {
+    const Faculty = require('../models/Faculty.model');
+    const ApiError = require('../utils/ApiError');
+    const { canManageSgpa } = req.body;
+    const f = await Faculty.findByIdAndUpdate(
+      req.params.id,
+      { $set: { canManageSgpa: !!canManageSgpa } },
+      { new: true }
+    );
+    if (!f) return next(ApiError.notFound('Faculty not found'));
+    return success(res, f, 'Permissions updated');
+  } catch (e) { next(e); }
+};
 exports.remove = async (req, res, next) => {
   try { return success(res, await service.remove(req.params.id, req.user), 'Faculty deleted'); }
   catch (e) { next(e); }

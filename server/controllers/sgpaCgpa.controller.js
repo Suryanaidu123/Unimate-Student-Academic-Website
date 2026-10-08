@@ -5,7 +5,7 @@ const ApiError    = require('../utils/ApiError');
 // ── Admin / Faculty — activation ──────────────────────────────────────────────
 
 exports.getActivations = async (req, res, next) => {
-  try { return success(res, await service.getActivations()); }
+  try { return success(res, await service.getActivations(req.user)); }
   catch (e) { next(e); }
 };
 

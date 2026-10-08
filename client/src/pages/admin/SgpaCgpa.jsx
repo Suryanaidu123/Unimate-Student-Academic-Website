@@ -19,6 +19,7 @@ import api from '../../services/api.js';
 import Card from '../../components/ui/Card.jsx';
 import Button from '../../components/ui/Button.jsx';
 import Badge from '../../components/ui/Badge.jsx';
+import ConfirmDialog from '../../components/ui/ConfirmDialog.jsx';
 
 // ── constants ─────────────────────────────────────────────────────────────────
 const YEAR_LABELS = { 2: '2nd Year', 3: '3rd Year', 4: '4th Year' };
@@ -85,6 +86,10 @@ export default function AdminSgpaCgpa() {
   const [loadingTrack,  setLoadingTrack]   = useState(false);
   const [expandedRows,  setExpandedRows]   = useState({}); // { studentId: bool }
 
+  // Confirm dialog state — { type: 'clearSem'|'clearCgpa'|'deleteRecord', studentId, extra }
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirming,    setConfirming]    = useState(false);
+
   // Load activations
   useEffect(() => {
     api.get('/sgpa-cgpa/activations')
@@ -131,30 +136,39 @@ export default function AdminSgpaCgpa() {
 
   // ── Admin clear actions ───────────────────────────────────────────────────────
   async function clearSem(studentId, semester, name) {
-    if (!window.confirm(`Clear ${SEM_LABELS[semester]} SGPA for ${name}? They can re-submit.`)) return;
-    try {
-      await api.patch(`/sgpa-cgpa/admin/${studentId}/clear-sem/${semester}`);
-      toast.success(`${SEM_LABELS[semester]} SGPA cleared.`);
-      reloadTracking(trackingYear, setTracking, setLoadingTrack);
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    setConfirmAction({ type: 'clearSem', studentId, semester, name });
   }
 
   async function clearCgpa(studentId, name) {
-    if (!window.confirm(`Clear CGPA for ${name}? They can re-submit.`)) return;
-    try {
-      await api.patch(`/sgpa-cgpa/admin/${studentId}/clear-cgpa`);
-      toast.success('CGPA cleared.');
-      reloadTracking(trackingYear, setTracking, setLoadingTrack);
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    setConfirmAction({ type: 'clearCgpa', studentId, name });
   }
 
   async function deleteRecord(studentId, name) {
-    if (!window.confirm(`Delete ALL SGPA/CGPA data for ${name}? This cannot be undone.`)) return;
+    setConfirmAction({ type: 'deleteRecord', studentId, name });
+  }
+
+  async function executeConfirmedAction() {
+    if (!confirmAction) return;
+    setConfirming(true);
     try {
-      await api.delete(`/sgpa-cgpa/admin/${studentId}`);
-      toast.success('Record deleted.');
+      const { type, studentId, semester } = confirmAction;
+      if (type === 'clearSem') {
+        await api.patch(`/sgpa-cgpa/admin/${studentId}/clear-sem/${semester}`);
+        toast.success(`${SEM_LABELS[semester]} SGPA cleared.`);
+      } else if (type === 'clearCgpa') {
+        await api.patch(`/sgpa-cgpa/admin/${studentId}/clear-cgpa`);
+        toast.success('CGPA cleared.');
+      } else if (type === 'deleteRecord') {
+        await api.delete(`/sgpa-cgpa/admin/${studentId}`);
+        toast.success('Record deleted.');
+      }
       reloadTracking(trackingYear, setTracking, setLoadingTrack);
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed'); }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed');
+    } finally {
+      setConfirmAction(null);
+      setConfirming(false);
+    }
   }
 
   function toggleRow(sid) {
@@ -485,6 +499,27 @@ export default function AdminSgpaCgpa() {
           </div>
         ) : null}
       </Card>
+
+      {/* Confirm dialog for admin clear/delete actions */}
+      <ConfirmDialog
+        open={!!confirmAction}
+        title={
+          confirmAction?.type === 'deleteRecord' ? 'Delete All SGPA/CGPA Data' :
+          confirmAction?.type === 'clearCgpa'    ? 'Clear CGPA'                :
+                                                    'Clear SGPA Entry'
+        }
+        message={
+          confirmAction?.type === 'deleteRecord'
+            ? `Delete ALL SGPA/CGPA data for ${confirmAction.name}? This cannot be undone.`
+            : confirmAction?.type === 'clearCgpa'
+            ? `Clear CGPA for ${confirmAction.name}? They will be able to re-submit.`
+            : `Clear ${SEM_LABELS[confirmAction?.semester]} SGPA for ${confirmAction?.name}? They will be able to re-submit.`
+        }
+        confirmLabel={confirmAction?.type === 'deleteRecord' ? 'Delete All' : 'Clear'}
+        onConfirm={executeConfirmedAction}
+        onCancel={() => setConfirmAction(null)}
+        loading={confirming}
+      />
     </div>
   );
 }

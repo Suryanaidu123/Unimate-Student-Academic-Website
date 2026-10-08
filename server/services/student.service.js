@@ -11,7 +11,7 @@ const BATCH_MAP = {
   4: { batch: '2023-2027', admissionYear: 2023 },
 };
 
-async function list({ q, year, semester, section, batch, status, page = 1, limit = 500 }) {
+async function list({ q, year, semester, section, batch, status, contactBlocked, page = 1, limit = 500 }) {
   const query = {};
 
   if (year) query.year = Number(year);
@@ -19,6 +19,7 @@ async function list({ q, year, semester, section, batch, status, page = 1, limit
   if (section) query.section = section;
   if (batch) query.batch = batch;
   if (status) query.status = status;
+  if (contactBlocked === 'true' || contactBlocked === true) query.contactBlocked = true;
 
   if (q) {
     query.$or = [

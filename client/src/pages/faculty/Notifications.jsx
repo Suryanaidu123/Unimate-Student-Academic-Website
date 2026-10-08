@@ -79,10 +79,26 @@ export default function FacultyNotifications() {
   }
 
   async function remove(id) {
-    if (!window.confirm('Delete this notification?')) return;
-    await api.delete(`/notifications/${id}`);
-    loadInbox();
-    refreshUnread();
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium">Delete this notification?</p>
+        <div className="flex gap-2">
+          <button
+            className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg font-semibold"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              await api.delete(`/notifications/${id}`);
+              loadInbox();
+              refreshUnread();
+            }}
+          >Delete</button>
+          <button
+            className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs rounded-lg font-semibold"
+            onClick={() => toast.dismiss(t.id)}
+          >Cancel</button>
+        </div>
+      </div>
+    ), { duration: 6000 });
   }
 
   return (

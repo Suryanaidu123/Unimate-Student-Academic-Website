@@ -61,15 +61,31 @@ export default function StudentContactAdmin() {
   }
 
   async function deleteMsg(id) {
-    if (!window.confirm('Delete this message? This cannot be undone.')) return;
-    try {
-      await api.delete(`/contact/mine/${id}`);
-      toast.success('Message deleted.');
-      setExpanded((p) => { const n = { ...p }; delete n[id]; return n; });
-      load();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to delete');
-    }
+    toast((t) => (
+      <div className="flex flex-col gap-2">
+        <p className="text-sm font-medium">Delete this message?</p>
+        <div className="flex gap-2">
+          <button
+            className="px-3 py-1.5 bg-red-600 text-white text-xs rounded-lg font-semibold"
+            onClick={async () => {
+              toast.dismiss(t.id);
+              try {
+                await api.delete(`/contact/mine/${id}`);
+                toast.success('Message deleted.');
+                setExpanded((p) => { const n = { ...p }; delete n[id]; return n; });
+                load();
+              } catch (err) {
+                toast.error(err.response?.data?.message || 'Failed to delete');
+              }
+            }}
+          >Delete</button>
+          <button
+            className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs rounded-lg font-semibold"
+            onClick={() => toast.dismiss(t.id)}
+          >Cancel</button>
+        </div>
+      </div>
+    ), { duration: 6000 });
   }
 
   const unreadCount = messages.filter((m) => m.status === 'OPEN').length;
